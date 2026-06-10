@@ -1,0 +1,40 @@
+**/node_modules/
+**/release/
+**/dist/
+
+# ビルド成果物
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.apk
+*.aab
+
+# IDE
+**/.idea/
+*.iml
+
+# Android (generated/local only)
+android/.gradle/
+android/local.properties
+android/build/
+android/app/build/
+
+# SQLite データベース（ユーザーデータ）
+*.db
+*.sqlite
+*.sqlite3
+
+# 環境変数・シークレット
+.env
+.env.local
+.env.*.local
+
+# ログ
+*.log
+logs/
+
+# OS 生成ファイル
+.DS_Store
+Thumbs.db

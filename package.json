@@ -1,0 +1,117 @@
+{
+  "name": "app-video-editing",
+  "version": "0.1.0",
+  "description": "Electron + React local video editor",
+  "author": "Frost",
+  "main": "Desktop/electron/main.js",
+  "type": "module",
+  "scripts": {
+    "react:start": "vite",
+    "react:build": "vite build",
+    "start": "electron .",
+    "dev": "concurrently \"npm run react:start\" \"wait-on tcp:5173 && electron .\"",
+    "move:exe": "node --input-type=commonjs -e \"const fs=require('fs');const path=require('path');const root=process.cwd();const release=path.join(root,'release');if(!fs.existsSync(release)) process.exit(0);for(const name of ['AMM-Setup-x64.exe','AMM-Setup-ia32.exe']){const target=path.join(root,name);if(fs.existsSync(target)) fs.rmSync(target,{force:true});}const files=fs.readdirSync(release);for(const f of files){const m=f.match(/^AMM-Setup-.*-(x64|ia32)\\.exe$/i);if(m){const dest=path.join(root,'AMM-Setup-'+m[1]+'.exe');fs.copyFileSync(path.join(release,f),dest);console.log('Copied release/'+f+' -> '+path.basename(dest));}}console.log('Portable app folders are available in release/win-unpacked and release/win-ia32-unpacked');\"",
+    "bring:exe": "npm run move:exe",
+    "dist:win": "npm run react:build && electron-builder --publish never --win nsis --x64 && npm run move:exe",
+    "dist:win32": "npm run react:build && electron-builder --publish never --win nsis --ia32 && npm run move:exe",
+    "dist:win:all": "npm run react:build && electron-builder --publish never --win nsis --x64 --ia32 && npm run move:exe",
+    "dist:mac": "npm run react:build && electron-builder --publish never --mac --x64",
+    "dist:mac:arm64": "npm run react:build && electron-builder --publish never --mac --arm64",
+    "dist:mac:all": "npm run react:build && electron-builder --publish never --mac --x64 --arm64",
+    "dist:all": "npm run dist:win:all && echo macOS release files are built in GitHub Actions or on a macOS machine with npm run dist:mac:all",
+    "dist:dir": "npm run react:build && electron-builder --dir",
+    "android:build": "npm run react:build && npx cap copy android && npx cap open android",
+    "android:sync": "npm run react:build && npx cap sync android",
+    "android:studio": "npm run android:sync && npx cap open android",
+    "android:apk:debug": "npm run android:sync && cd android && gradlew.bat assembleDebug",
+    "android:apk:release": "npm run android:sync && cd android && gradlew.bat assembleRelease"
+  },
+  "keywords": [],
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor-community/sqlite": "^8.1.0",
+    "@capacitor/android": "^8.3.3",
+    "@capacitor/core": "^8.3.3",
+    "better-sqlite3": "^12.9.0",
+    "chart.js": "^4.5.1",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
+    "mongodb": "^6.21.0",
+    "react": "^18.3.1",
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.3.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.2.1",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.8.1",
+    "typescript": "^6.0.3",
+    "vite": "^6.4.2",
+    "wait-on": "^9.0.4"
+  },
+  "build": {
+    "appId": "com.frost.videoeditor",
+    "productName": "VideoEditing",
+    "files": [
+      "Desktop/electron/**/*",
+      "dist/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/ffmpeg-static/**/*",
+      "node_modules/ffprobe-static/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "executableName": "VideoEditing",
+      "artifactName": "VideoEditing-${version}-${arch}.${ext}",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        }
+      ]
+    },
+    "mac": {
+      "executableName": "VideoEditing",
+      "artifactName": "VideoEditing-mac-${version}-${arch}.${ext}",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "guid": "com.frost.videoeditor",
+      "deleteAppDataOnUninstall": false,
+      "createStartMenuShortcut": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "VideoEditing"
+    },
+    "extraMetadata": {
+      "main": "Desktop/electron/main.js"
+    }
+  }
+}

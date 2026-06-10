@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MoneyManagement</string>
+    <string name="title_activity_main">MoneyManagement</string>
+    <string name="package_name">com.frost.appmoneymanagement</string>
+    <string name="custom_url_scheme">com.frost.appmoneymanagement</string>
+</resources>

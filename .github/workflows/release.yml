@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows installer (x64 + ia32)
+        run: npm run react:build && npx electron-builder --publish never --win nsis --x64 --ia32
+
+      - name: Upload installers to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $x64  = Get-Item "release\MoneyManagement-*-x64.exe"  | Select-Object -First 1
+          $ia32 = Get-Item "release\MoneyManagement-*-ia32.exe" | Select-Object -First 1
+
+          gh release create $tag `
+            --title "MoneyManagement $tag" `
+            --generate-notes `
+            $x64.FullName `
+            $ia32.FullName
