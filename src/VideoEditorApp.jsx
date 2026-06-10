@@ -6,6 +6,8 @@ import {
   insertSegmentsAt,
   removeRange,
   segmentDuration,
+  timelineToSourceTime,
+  sourceToTimelineTime,
   timelineDuration,
   normalizeRange
 } from "./lib/videoTimeline.js";
@@ -293,9 +295,10 @@ export default function VideoEditorApp() {
 
     const video = previewVideoRef.current;
     if (video) {
-      const delta = Math.abs((Number(video.currentTime) || 0) - safeTime);
+      const mappedSourceTime = timelineToSourceTime(segments, safeTime);
+      const delta = Math.abs((Number(video.currentTime) || 0) - mappedSourceTime);
       if (delta > 0.05) {
-        video.currentTime = safeTime;
+        video.currentTime = mappedSourceTime;
       }
     }
   }
@@ -327,13 +330,28 @@ export default function VideoEditorApp() {
     if (!snapshot) {
       return;
     }
-
-    setSegments(cloneSegments(snapshot.segments));
+    const snapSegments = cloneSegments(snapshot.segments || []);
+    setSegments(snapSegments);
     setSelectionStart(snapshot.selectionStart);
     setSelectionEnd(snapshot.selectionEnd);
     setPlayheadWithPreview(snapshot.playhead);
     setClipboard(cloneSegments(snapshot.clipboard));
-    setCutMarkers(Array.isArray(snapshot.cutMarkers) ? snapshot.cutMarkers.map((m) => (m && typeof m === 'object' ? { start: Number(m.start) || 0, end: Number(m.end) || 0 } : { start: Number(m) || 0, end: Number(m) || 0 })) : []);
+
+    // Restore cut markers. Markers may be stored as source times or timeline times.
+    // If a marker's start maps to a timeline position within the composed timeline,
+    // convert it. Otherwise, keep numeric values as-is (assume already timeline-based).
+    const composedDuration = timelineDuration(snapSegments);
+    const restoredMarkers = Array.isArray(snapshot.cutMarkers)
+      ? snapshot.cutMarkers.map((m) => {
+          const raw = m && typeof m === 'object' ? { start: Number(m.start) || 0, end: Number(m.end) || 0 } : { start: Number(m) || 0, end: Number(m) || 0 };
+          const maybeStart = sourceToTimelineTime(snapSegments, raw.start);
+          const maybeEnd = sourceToTimelineTime(snapSegments, raw.end);
+          const start = (maybeStart !== null && maybeStart <= composedDuration) ? maybeStart : raw.start;
+          const end = (maybeEnd !== null && maybeEnd <= composedDuration) ? maybeEnd : raw.end;
+          return { start, end };
+        })
+      : [];
+    setCutMarkers(restoredMarkers);
     setCrop({ ...snapshot.crop });
     setIsCropPreviewLocked(Boolean(snapshot.isCropPreviewLocked));
     setOutputPath(snapshot.outputPath);
@@ -521,7 +539,10 @@ export default function VideoEditorApp() {
   function handlePreviewTimeUpdate(event) {
     const currentTime = Number(event.currentTarget.currentTime) || 0;
     setPreviewCurrentTime(currentTime);
-    setPlayhead((current) => Math.abs(current - currentTime) > 0.15 ? currentTime : current);
+    const timelineTime = sourceToTimelineTime(segments, currentTime);
+    if (timelineTime !== null) {
+      setPlayhead((current) => Math.abs(current - timelineTime) > 0.15 ? timelineTime : current);
+    }
   }
 
   async function handleTogglePreviewPlayback() {

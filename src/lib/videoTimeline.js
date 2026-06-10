@@ -13,6 +13,43 @@ export function timelineDuration(segments) {
   return segments.reduce((total, segment) => total + segmentDuration(segment), 0);
 }
 
+// Map a time measured in composed timeline seconds to the corresponding
+// source video time. If `time` is beyond the composed duration, returns
+// the end time of the last segment. If there are no segments, returns 0.
+export function timelineToSourceTime(segments, time) {
+  const t = Math.max(0, Number(time) || 0);
+  if (!Array.isArray(segments) || !segments.length) return 0;
+  let cursor = 0;
+  for (const segment of segments) {
+    const dur = segmentDuration(segment);
+    if (t >= cursor && t <= cursor + dur) {
+      const within = Math.min(dur, Math.max(0, t - cursor));
+      return Number(segment.start || 0) + within;
+    }
+    cursor += dur;
+  }
+  const last = segments[segments.length - 1];
+  return Number(last.end || last.start || 0);
+}
+
+// Map a source video time to the first matching composed timeline time.
+// If the source time does not fall inside any segment, returns null.
+export function sourceToTimelineTime(segments, sourceTime) {
+  const s = Number(sourceTime);
+  if (!Number.isFinite(s)) return null;
+  let cursor = 0;
+  for (const segment of segments) {
+    const segStart = Number(segment.start || 0);
+    const segEnd = Number(segment.end || 0);
+    const dur = Math.max(0, segEnd - segStart);
+    if (s >= segStart && s <= segEnd) {
+      return cursor + Math.min(dur, Math.max(0, s - segStart));
+    }
+    cursor += dur;
+  }
+  return null;
+}
+
 export function formatSeconds(value) {
   const total = Math.max(0, Number(value) || 0);
   const hours = Math.floor(total / 3600);
