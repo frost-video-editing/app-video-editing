@@ -1,76 +1,87 @@
-import React from "react";
 import { clamp } from "../../lib/videoTimeline.js";
 
-// Compute a square draft (startX,startY,endX,endY) given a start and current pointer.
-export function computeSquareDraft(startX, startY, pointerX, pointerY, previewBounds) {
-  if (!previewBounds) return null;
+const MIN_CROP_BOX_SIZE = 12;
+const MAX_CROP_SUM = 99;
 
-  const dx = pointerX - startX;
-  const dy = pointerY - startY;
-  const desired = Math.max(Math.abs(dx), Math.abs(dy));
-  const px = clamp(pointerX, 0, previewBounds.width);
-  const py = clamp(pointerY, 0, previewBounds.height);
-  const toRight = dx >= 0;
-  const toBottom = dy >= 0;
-
-  let s = desired;
-  let sX0, sY0, sX1, sY1;
-
-  if (toRight && toBottom) {
-    sX1 = px;
-    sY1 = py;
-    sX0 = sX1 - s;
-    sY0 = sY1 - s;
-    if (sX0 < 0) {
-      sX0 = 0; sX1 = sX0 + s;
-    }
-    if (sY0 < 0) {
-      sY0 = 0; sY1 = sY0 + s;
-    }
-    if (sX1 > previewBounds.width) { s = previewBounds.width - sX0; sX1 = sX0 + s; }
-    if (sY1 > previewBounds.height) { s = Math.min(s, previewBounds.height - sY0); sY1 = sY0 + s; }
-  } else if (!toRight && toBottom) {
-    sX1 = px;
-    sY1 = py;
-    sX0 = sX1 + s;
-    sY0 = sY1 - s;
-    if (sX0 > previewBounds.width) sX0 = previewBounds.width;
-    if (sY0 < 0) { sY0 = 0; sY1 = sY0 + s; }
-    sX1 = sX0 - s;
-    if (sX1 < 0) { s = sX0; sX1 = 0; sX0 = s; }
-    if (sY1 > previewBounds.height) { s = Math.min(s, previewBounds.height - sY0); sX0 = sX1 + s; sY0 = sY1 - s; }
-  } else if (toRight && !toBottom) {
-    sX1 = px;
-    sY1 = py;
-    sX0 = sX1 - s;
-    sY0 = sY1 + s;
-    if (sY0 > previewBounds.height) sY0 = previewBounds.height;
-    if (sX0 < 0) { sX0 = 0; sX1 = sX0 + s; }
-    sY1 = sY0 - s;
-    if (sY1 < 0) { s = sY0; sY1 = 0; sY0 = s; }
-  } else {
-    sX1 = px;
-    sY1 = py;
-    sX0 = sX1 + s;
-    sY0 = sY1 + s;
-    if (sX0 > previewBounds.width) sX0 = previewBounds.width;
-    if (sY0 > previewBounds.height) sY0 = previewBounds.height;
-    sX1 = sX0 - s;
-    sY1 = sY0 - s;
-    if (sX1 < 0) { s = sX0; sX1 = 0; sX0 = s; }
-    if (sY1 < 0) { s = sY0; sY1 = 0; sY0 = s; }
+function scaleCropAxis(startPercent, endPercent) {
+  const total = startPercent + endPercent;
+  if (total <= MAX_CROP_SUM) {
+    return [startPercent, endPercent];
   }
 
-  sX0 = clamp(sX0, 0, previewBounds.width);
-  sY0 = clamp(sY0, 0, previewBounds.height);
-  sX1 = clamp(sX1, 0, previewBounds.width);
-  sY1 = clamp(sY1, 0, previewBounds.height);
-
-  return { startX: sX0, startY: sY0, endX: sX1, endY: sY1 };
+  const scale = MAX_CROP_SUM / total;
+  return [startPercent * scale, endPercent * scale];
 }
 
-export function computeCropPercentFromSquare(startX, startY, endX, endY, previewBounds) {
-  if (!previewBounds) return null;
+// Clamp crop percentages while keeping at least 1% of the frame on each axis.
+export function normalizeCropInput(nextCrop) {
+  const left = clamp(Number(nextCrop?.left) || 0, 0, MAX_CROP_SUM);
+  const top = clamp(Number(nextCrop?.top) || 0, 0, MAX_CROP_SUM);
+  const right = clamp(Number(nextCrop?.right) || 0, 0, MAX_CROP_SUM);
+  const bottom = clamp(Number(nextCrop?.bottom) || 0, 0, MAX_CROP_SUM);
+
+  const [safeLeft, safeRight] = scaleCropAxis(left, right);
+  const [safeTop, safeBottom] = scaleCropAxis(top, bottom);
+
+  return {
+    left: safeLeft,
+    top: safeTop,
+    right: safeRight,
+    bottom: safeBottom
+  };
+}
+
+// Convert a client pointer position into preview-relative coordinates.
+export function getPreviewPoint(clientX, clientY, stageRect, previewBounds) {
+  if (!stageRect || !previewBounds) {
+    return null;
+  }
+
+  return {
+    x: clamp(clientX - stageRect.left - previewBounds.left, 0, previewBounds.width),
+    y: clamp(clientY - stageRect.top - previewBounds.top, 0, previewBounds.height)
+  };
+}
+
+// Update the current crop draft with a freely resizable rectangle.
+export function updateCropDraft(currentDraft, point, previewBounds) {
+  if (!currentDraft || !point || !previewBounds) {
+    return currentDraft;
+  }
+
+  return {
+    ...currentDraft,
+    endX: clamp(point.x, 0, previewBounds.width),
+    endY: clamp(point.y, 0, previewBounds.height)
+  };
+}
+
+// Build the overlay style for the current draft rectangle.
+export function getDraftCropBoxStyle(cropDraft, previewBounds) {
+  if (!cropDraft || !previewBounds) {
+    return null;
+  }
+
+  const { startX, startY, endX, endY } = cropDraft;
+  const left = Math.min(startX, endX);
+  const top = Math.min(startY, endY);
+  const width = Math.abs(endX - startX);
+  const height = Math.abs(endY - startY);
+
+  return {
+    left: `${(left / previewBounds.width) * 100}%`,
+    top: `${(top / previewBounds.height) * 100}%`,
+    width: `${(width / previewBounds.width) * 100}%`,
+    height: `${(height / previewBounds.height) * 100}%`
+  };
+}
+
+// Convert a draft rectangle into crop percentages for preview and export.
+export function computeCropPercentFromDraft(startX, startY, endX, endY, previewBounds) {
+  if (!previewBounds) {
+    return null;
+  }
+
   const left = Math.min(startX, endX);
   const top = Math.min(startY, endY);
   const width = Math.abs(endX - startX);
@@ -84,44 +95,25 @@ export function computeCropPercentFromSquare(startX, startY, endX, endY, preview
   };
 }
 
-export default function CropOverlay({
-  previewBounds,
-  isCropSelecting,
-  cropDraft,
-  draftCropBoxStyle,
-  hasCrop,
-  currentCropBoxStyle,
-  onPointerDown,
-  onPointerMove,
-  onPointerUp,
-  onPointerCancel
-}) {
-  if (!previewBounds) return null;
+// Finalize a crop draft into normalized percentages or return null for tiny drags.
+export function finalizeCropSelection(cropDraft, previewBounds) {
+  if (!cropDraft || !previewBounds) {
+    return null;
+  }
 
-  return (
-    <div
-      className={`preview-crop-overlay${isCropSelecting ? " preview-crop-overlay--interactive" : ""}`}
-      style={{
-        left: `${previewBounds.left}px`,
-        top: `${previewBounds.top}px`,
-        width: `${previewBounds.width}px`,
-        height: `${previewBounds.height}px`
-      }}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerCancel}
-    >
-      {hasCrop && !cropDraft && currentCropBoxStyle ? (
-        <div className="preview-crop-selection" style={currentCropBoxStyle}>
-          <span className="preview-crop-selection__label">現在の crop</span>
-        </div>
-      ) : null}
-      {cropDraft && draftCropBoxStyle ? (
-        <div className="preview-crop-selection preview-crop-selection--draft" style={draftCropBoxStyle}>
-          <span className="preview-crop-selection__label">選択中</span>
-        </div>
-      ) : null}
-    </div>
+  const width = Math.abs(cropDraft.endX - cropDraft.startX);
+  const height = Math.abs(cropDraft.endY - cropDraft.startY);
+  if (width < MIN_CROP_BOX_SIZE || height < MIN_CROP_BOX_SIZE) {
+    return null;
+  }
+
+  return normalizeCropInput(
+    computeCropPercentFromDraft(
+      cropDraft.startX,
+      cropDraft.startY,
+      cropDraft.endX,
+      cropDraft.endY,
+      previewBounds
+    )
   );
 }

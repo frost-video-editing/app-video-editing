@@ -355,21 +355,24 @@ function formatTimestamp(value) {
 }
 
 function normalizeCrop(crop, width, height) {
-  const clampPercent = (value) => Math.min(45, Math.max(0, Number(value) || 0));
+  const maxCropSum = 99;
+  const clampPercent = (value) => Math.min(maxCropSum, Math.max(0, Number(value) || 0));
+  const scaleAxis = (start, end) => {
+    const total = start + end;
+    if (total <= maxCropSum) {
+      return [start, end];
+    }
+
+    const scale = maxCropSum / total;
+    return [start * scale, end * scale];
+  };
   const left = clampPercent(crop?.left);
   const top = clampPercent(crop?.top);
   const right = clampPercent(crop?.right);
   const bottom = clampPercent(crop?.bottom);
 
-  const horizontal = left + right;
-  const vertical = top + bottom;
-  const horizontalScale = horizontal > 96 ? 96 / horizontal : 1;
-  const verticalScale = vertical > 96 ? 96 / vertical : 1;
-
-  const scaledLeft = left * horizontalScale;
-  const scaledRight = right * horizontalScale;
-  const scaledTop = top * verticalScale;
-  const scaledBottom = bottom * verticalScale;
+  const [scaledLeft, scaledRight] = scaleAxis(left, right);
+  const [scaledTop, scaledBottom] = scaleAxis(top, bottom);
 
   const cropWidth = Math.max(2, Math.floor((width * (1 - (scaledLeft + scaledRight) / 100)) / 2) * 2);
   const cropHeight = Math.max(2, Math.floor((height * (1 - (scaledTop + scaledBottom) / 100)) / 2) * 2);
