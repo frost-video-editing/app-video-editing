@@ -13,7 +13,13 @@ import {
 } from "./lib/videoTimeline.js";
 import TimelineVisualizer from "./components/TimelineVisualizer.jsx";
 import LoadingIndicator from "./components/LoadingIndicator.jsx";
-import CropOverlay, { computeSquareDraft, computeCropPercentFromSquare } from "./components/button/crop.jsx";
+import {
+  finalizeCropSelection,
+  getDraftCropBoxStyle,
+  getPreviewPoint as getCropPreviewPoint,
+  normalizeCropInput,
+  updateCropDraft
+} from "./components/button/crop.jsx";
 
 const emptyCrop = { left: 0, top: 0, right: 0, bottom: 0 };
 
@@ -32,15 +38,6 @@ function formatVideoTime(totalSeconds) {
   const seconds = Math.floor(total % 60);
   const fraction = Math.round((total - Math.floor(total)) * 1000);
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(fraction).padStart(3, "0")}`;
-}
-
-function normalizeCropInput(nextCrop) {
-  return {
-    left: clamp(Number(nextCrop.left) || 0, 0, 45),
-    top: clamp(Number(nextCrop.top) || 0, 0, 45),
-    right: clamp(Number(nextCrop.right) || 0, 0, 45),
-    bottom: clamp(Number(nextCrop.bottom) || 0, 0, 45)
-  };
 }
 
 export default function VideoEditorApp() {
@@ -153,21 +150,7 @@ export default function VideoEditorApp() {
 
 
   const draftCropBoxStyle = useMemo(() => {
-    if (!cropDraft || !previewBounds) {
-      return null;
-    }
-
-    const left = Math.min(cropDraft.startX, cropDraft.endX);
-    const top = Math.min(cropDraft.startY, cropDraft.endY);
-    const width = Math.abs(cropDraft.endX - cropDraft.startX);
-    const height = Math.abs(cropDraft.endY - cropDraft.startY);
-
-    return {
-      left: `${(left / previewBounds.width) * 100}%`,
-      top: `${(top / previewBounds.height) * 100}%`,
-      width: `${(width / previewBounds.width) * 100}%`,
-      height: `${(height / previewBounds.height) * 100}%`
-    };
+    return getDraftCropBoxStyle(cropDraft, previewBounds);
   }, [cropDraft, previewBounds]);
 
   useEffect(() => {
@@ -652,11 +635,7 @@ export default function VideoEditorApp() {
       return null;
     }
 
-    const stageRect = stage.getBoundingClientRect();
-    return {
-      x: clamp(clientX - stageRect.left - previewBounds.left, 0, previewBounds.width),
-      y: clamp(clientY - stageRect.top - previewBounds.top, 0, previewBounds.height)
-    };
+    return getCropPreviewPoint(clientX, clientY, stage.getBoundingClientRect(), previewBounds);
   }
 
 
@@ -716,125 +695,7 @@ export default function VideoEditorApp() {
     if (!point) {
       return;
     }
-    // Crop selection → always square. Use the larger axis so dragging to the corner
-    // can expand the square to the full preview bounds, then clamp to bounds.
-    setCropDraft((current) => {
-      if (!current) return current;
-
-      const dx = point.x - current.startX;
-      const dy = point.y - current.startY;
-      const absDx = Math.abs(dx);
-      const absDy = Math.abs(dy);
-
-      const desired = Math.max(absDx, absDy);
-
-      // Pointer clamped within preview
-      const px = clamp(point.x, 0, previewBounds.width);
-      const py = clamp(point.y, 0, previewBounds.height);
-
-      // Determine which corner the pointer represents relative to start
-      const toRight = dx >= 0;
-      const toBottom = dy >= 0;
-
-      // Try to place square with pointer as the corner, then adjust to fit bounds
-      let s = desired;
-      let startX, startY, endX, endY;
-
-      if (toRight && toBottom) {
-        endX = px;
-        endY = py;
-        startX = endX - s;
-        startY = endY - s;
-        if (startX < 0) {
-          startX = 0;
-          endX = startX + s;
-        }
-        if (startY < 0) {
-          startY = 0;
-          endY = startY + s;
-        }
-        if (endX > previewBounds.width) {
-          s = previewBounds.width - startX;
-          endX = startX + s;
-        }
-        if (endY > previewBounds.height) {
-          s = Math.min(s, previewBounds.height - startY);
-          endY = startY + s;
-        }
-      } else if (!toRight && toBottom) {
-        endX = px;
-        endY = py;
-        startX = endX + s;
-        startY = endY - s;
-        // when pointer is bottom-left, startX should be > endX, adjust
-        startX = Math.min(startX, previewBounds.width);
-        if (startX > previewBounds.width) startX = previewBounds.width;
-        if (startY < 0) {
-          startY = 0;
-          endY = startY + s;
-        }
-        // recompute using endX as left edge
-        startX = endX + s > previewBounds.width ? previewBounds.width : endX + s;
-        // correct positions
-        startX = Math.max(0, Math.min(previewBounds.width, startX));
-        endX = startX - s;
-        if (endX < 0) {
-          s = startX;
-          endX = 0;
-          startX = s;
-        }
-        // ensure vertical fit
-        if (endY > previewBounds.height) {
-          s = Math.min(s, previewBounds.height - startY);
-          startX = endX + s;
-          startY = endY - s;
-        }
-      } else if (toRight && !toBottom) {
-        endX = px;
-        endY = py;
-        startX = endX - s;
-        startY = endY + s;
-        if (startY > previewBounds.height) startY = previewBounds.height;
-        if (startX < 0) {
-          startX = 0;
-          endX = startX + s;
-        }
-        endY = startY - s;
-        if (endY < 0) {
-          s = startY;
-          endY = 0;
-          startY = s;
-        }
-      } else {
-        // pointer is top-left relative to start
-        endX = px;
-        endY = py;
-        startX = endX + s;
-        startY = endY + s;
-        if (startX > previewBounds.width) startX = previewBounds.width;
-        if (startY > previewBounds.height) startY = previewBounds.height;
-        endX = startX - s;
-        endY = startY - s;
-        if (endX < 0) {
-          s = startX;
-          endX = 0;
-          startX = s;
-        }
-        if (endY < 0) {
-          s = startY;
-          endY = 0;
-          startY = s;
-        }
-      }
-
-      // final clamp
-      startX = clamp(startX, 0, previewBounds.width);
-      startY = clamp(startY, 0, previewBounds.height);
-      endX = clamp(endX, 0, previewBounds.width);
-      endY = clamp(endY, 0, previewBounds.height);
-
-      return { startX, startY, endX, endY };
-    });
+    setCropDraft((current) => updateCropDraft(current, point, previewBounds));
   }
 
   function handlePreviewPointerUp(event) {
@@ -843,26 +704,13 @@ export default function VideoEditorApp() {
     }
 
     event.currentTarget.releasePointerCapture?.(event.pointerId);
-    // finalize crop using helpers in crop module
-    const square = computeSquareDraft(cropDraft.startX, cropDraft.startY, cropDraft.endX, cropDraft.endY, previewBounds);
-    if (!square) {
+    const nextCrop = finalizeCropSelection(cropDraft, previewBounds);
+    if (!nextCrop) {
       setStatus("ドラッグして残したい範囲を選択してください。");
       setCropDraft(null);
       return;
     }
 
-    const { startX, startY, endX, endY } = square;
-    const width = Math.abs(endX - startX);
-    const height = Math.abs(endY - startY);
-
-    if (width < 12 || height < 12) {
-      setStatus("ドラッグして残したい範囲を選択してください。");
-      setCropDraft(null);
-      return;
-    }
-
-    const percent = computeCropPercentFromSquare(startX, startY, endX, endY, previewBounds);
-    const nextCrop = normalizeCropInput(percent);
     pushUndoSnapshot();
     setCrop(nextCrop);
     setCropDraft(null);
