@@ -13,6 +13,7 @@ import {
 } from "./lib/videoTimeline.js";
 import TimelineVisualizer from "./components/TimelineVisualizer.jsx";
 import LoadingIndicator from "./components/LoadingIndicator.jsx";
+import useShortcuts from "./hooks/useShortcuts";
 import {
   finalizeCropSelection,
   getDraftCropBoxStyle,
@@ -93,6 +94,10 @@ export default function VideoEditorApp() {
   const [previewPlaybackRate, setPreviewPlaybackRate] = useState(1);
   const [isCropPreviewLocked, setIsCropPreviewLocked] = useState(false);
   const [undoStack, setUndoStack] = useState([]);
+  const [cropForm, setCropForm] = useState({ left: 0, top: 0, width: 100, height: 100 });
+  const [cropFormUnit, setCropFormUnit] = useState("%"); // "%" or "px"
+  const [cropPresets, setCropPresets] = useState([]);
+  const [presetName, setPresetName] = useState("");
 
   const totalDuration = useMemo(() => timelineDuration(segments), [segments]);
   const selectedRange = useMemo(
@@ -159,6 +164,151 @@ export default function VideoEditorApp() {
       height: `${previewBounds.height}px`
     };
   }, [hasCrop, isCropPreviewLocked, previewBounds]);
+
+  // Helper to format crop values for display (pixels + percent)
+  function formatCropDisplayFromPercent(cropPercent) {
+    if (!previewBounds || !cropPercent) return null;
+    const leftPx = (Number(cropPercent.left) || 0) / 100 * previewBounds.width;
+    const topPx = (Number(cropPercent.top) || 0) / 100 * previewBounds.height;
+    const rightPx = (Number(cropPercent.right) || 0) / 100 * previewBounds.width;
+    const bottomPx = (Number(cropPercent.bottom) || 0) / 100 * previewBounds.height;
+    const widthPx = Math.max(0, previewBounds.width - leftPx - rightPx);
+    const heightPx = Math.max(0, previewBounds.height - topPx - bottomPx);
+    return {
+      leftPx: Math.round(leftPx),
+      topPx: Math.round(topPx),
+      widthPx: Math.round(widthPx),
+      heightPx: Math.round(heightPx),
+      leftPct: Number(cropPercent.left) || 0,
+      topPct: Number(cropPercent.top) || 0,
+      rightPct: Number(cropPercent.right) || 0,
+      bottomPct: Number(cropPercent.bottom) || 0
+    };
+  }
+
+  function formatDraftDisplay(draft) {
+    if (!draft || !previewBounds) return null;
+    const left = Math.min(draft.startX, draft.endX);
+    const top = Math.min(draft.startY, draft.endY);
+    const width = Math.abs(draft.endX - draft.startX);
+    const height = Math.abs(draft.endY - draft.startY);
+    return {
+      leftPx: Math.round(left),
+      topPx: Math.round(top),
+      widthPx: Math.round(width),
+      heightPx: Math.round(height),
+      leftPct: (left / previewBounds.width) * 100,
+      topPct: (top / previewBounds.height) * 100,
+      widthPct: (width / previewBounds.width) * 100,
+      heightPct: (height / previewBounds.height) * 100
+    };
+  }
+
+  // Sync cropForm when confirmed crop changes. Respect current unit.
+  useEffect(() => {
+    if (!previewBounds) return;
+    const left = Number(crop.left) || 0;
+    const top = Number(crop.top) || 0;
+    const right = Number(crop.right) || 0;
+    const bottom = Number(crop.bottom) || 0;
+    const widthPct = Math.max(0, 100 - left - right);
+    const heightPct = Math.max(0, 100 - top - bottom);
+    if (cropFormUnit === "%") {
+      setCropForm({ left: Number(left.toFixed(2)), top: Number(top.toFixed(2)), width: Number(widthPct.toFixed(2)), height: Number(heightPct.toFixed(2)) });
+    } else {
+      const leftPx = (left / 100) * previewBounds.width;
+      const topPx = (top / 100) * previewBounds.height;
+      const widthPx = (widthPct / 100) * previewBounds.width;
+      const heightPx = (heightPct / 100) * previewBounds.height;
+      setCropForm({ left: Math.round(leftPx), top: Math.round(topPx), width: Math.round(widthPx), height: Math.round(heightPx) });
+    }
+  }, [crop, previewBounds, cropFormUnit]);
+
+  // Load presets from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("videoEditor.cropPresets");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setCropPresets(parsed);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  // Persist presets
+  useEffect(() => {
+    try {
+      localStorage.setItem("videoEditor.cropPresets", JSON.stringify(cropPresets));
+    } catch (e) {
+      // ignore
+    }
+  }, [cropPresets]);
+
+  function handleSaveCropPreset() {
+    if (!hasCrop) {
+      setErrorText("先に crop を指定してください。");
+      return;
+    }
+    const name = (presetName || `preset-${new Date().toISOString()}`).trim();
+    const preset = { id: Date.now(), name, crop: normalizeCropInput(crop) };
+    setCropPresets((cur) => [preset, ...cur].slice(0, 50));
+    setPresetName("");
+    setStatus(`crop を保存しました: ${name}`);
+    setErrorText("");
+  }
+
+  function handleApplyCropPreset(preset) {
+    if (!preset || !preset.crop) return;
+    pushUndoSnapshot();
+    setCrop({ ...preset.crop });
+    setIsCropPreviewLocked(true);
+    setStatus(`保存済み preset を適用しました: ${preset.name}`);
+  }
+
+  function handleDeletePreset(id) {
+    setCropPresets((cur) => cur.filter((p) => p.id !== id));
+    setStatus("preset を削除しました。");
+  }
+
+  function handleCropFormChange(field, value) {
+    const num = Number(value);
+    if (Number.isNaN(num)) return;
+    setCropForm((c) => ({ ...c, [field]: num }));
+  }
+
+  function applyCropFromForm() {
+    if (!previewBounds) {
+      setErrorText("プレビュー領域が準備できていません。");
+      return;
+    }
+    let leftPct, topPct, widthPct, heightPct;
+    if (cropFormUnit === "%") {
+      leftPct = clamp(Number(cropForm.left) || 0, 0, 99);
+      topPct = clamp(Number(cropForm.top) || 0, 0, 99);
+      widthPct = clamp(Number(cropForm.width) || 0, 1, 100 - leftPct);
+      heightPct = clamp(Number(cropForm.height) || 0, 1, 100 - topPct);
+    } else {
+      const leftPx = clamp(Math.round(Number(cropForm.left) || 0), 0, Math.max(0, previewBounds.width - 1));
+      const topPx = clamp(Math.round(Number(cropForm.top) || 0), 0, Math.max(0, previewBounds.height - 1));
+      const widthPx = clamp(Math.round(Number(cropForm.width) || 0), 1, Math.max(1, previewBounds.width - leftPx));
+      const heightPx = clamp(Math.round(Number(cropForm.height) || 0), 1, Math.max(1, previewBounds.height - topPx));
+      leftPct = (leftPx / previewBounds.width) * 100;
+      topPct = (topPx / previewBounds.height) * 100;
+      widthPct = (widthPx / previewBounds.width) * 100;
+      heightPct = (heightPx / previewBounds.height) * 100;
+    }
+
+    const right = Math.max(0, 100 - leftPct - widthPct);
+    const bottom = Math.max(0, 100 - topPct - heightPct);
+
+    const next = normalizeCropInput({ left: leftPct, top: topPct, right, bottom });
+    pushUndoSnapshot();
+    setCrop(next);
+    setIsCropPreviewLocked(true);
+    setStatus("数値で指定した crop を適用しました。");
+  }
 
 
   const draftCropBoxStyle = useMemo(() => {
@@ -578,55 +728,15 @@ export default function VideoEditorApp() {
     setStatus(next === 1 ? "プレビュー速度を通常に戻しました。" : "プレビュー速度を低速（0.5×）にしました。");
   }
 
-  useEffect(() => {
-    function onKeyDown(e) {
-      if (e.repeat) return;
-      const code = e.code || e.key;
-      if (code === "Space" || code === "Enter") {
-        const target = e.target;
-        const tag = target && target.tagName ? String(target.tagName).toLowerCase() : null;
-        if (tag === "input" || tag === "textarea" || target?.isContentEditable) {
-          return;
-        }
-        e.preventDefault?.();
-        handleTogglePreviewPlayback();
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleTogglePreviewPlayback]);
-
-  // Global shortcut: T Key for `handleCut` (split at current playhead).
-  useEffect(() => {
-    function onCutShortcut(e) {
-      if (e.repeat) return;
-      // Support T
-      if (e.code === "KeyT") {
-        const target = e.target;
-        const tag = target && target.tagName ? String(target.tagName).toLowerCase() : null;
-        if (tag === "input" || tag === "textarea" || target?.isContentEditable) {
-          return;
-        }
-        e.preventDefault?.();
-
-        if (!segments.length || isExporting) {
-          setErrorText("切り取りできる動画が読み込まれていないか、出力中のため操作できません。");
-          return;
-        }
-
-        try {
-          handleCut();
-        } catch (err) {
-          console.error("Shortcut handleCut failed", err);
-          setErrorText("ショートカットの実行に失敗しました。コンソールを確認してください。");
-        }
-      }
-    }
-
-    window.addEventListener("keydown", onCutShortcut);
-    return () => window.removeEventListener("keydown", onCutShortcut);
-  }, [segments.length, isExporting, handleCut]);
+  // Centralized shortcut handling
+  useShortcuts({
+    onTogglePreviewPlayback: handleTogglePreviewPlayback,
+    onCut: handleCut,
+    onReturn: handleUndo,
+    segmentsLength: segments.length,
+    isExporting,
+    setErrorText
+  });
 
   function handleSplitAtPreview() {
     if (!segments.length) {
@@ -723,6 +833,9 @@ export default function VideoEditorApp() {
 
     // Otherwise begin/resume a new selection from the pointer location.
     setCropDraft({ startX: point.x, startY: point.y, endX: point.x, endY: point.y });
+    // mark this as a fresh freeform selection so finalization won't compose
+    // it inside the previous crop (if any).
+    setCropInteraction({ mode: "new", pointerStart: { x: point.x, y: point.y } });
   }
 
   function handleStartCropSelection() {
@@ -730,11 +843,12 @@ export default function VideoEditorApp() {
       return;
     }
     // If there's an existing crop, lock preview to that crop and initialize the draft
-    // to cover the whole cropped viewport so the confirmed crop appears full-screen
-    // and further adjustments are limited to inside it.
+    // to the current crop area so the user can micro-adjust (move/resize).
     if (hasCrop) {
       setIsCropPreviewLocked(true);
-      setCropDraft({ startX: 0, startY: 0, endX: previewBounds.width, endY: previewBounds.height });
+      // Initialize draft from the existing normalized crop so edges are editable.
+      const draft = createDraftFromCropPercent(crop, previewBounds);
+      setCropDraft(draft);
     } else {
       setIsCropPreviewLocked(false);
       setCropDraft(null);
@@ -796,7 +910,11 @@ export default function VideoEditorApp() {
       setCropInteraction(null);
     }
 
-    const nextCrop = finalizeCropSelection(cropDraft, previewBounds, hasCrop ? crop : null);
+    // If this selection was started as a fresh freeform (`mode: 'new'`), do not
+    // compose it with the previous crop; otherwise pass the prev crop so
+    // the selection can be refined inside the existing kept region.
+    const usePrev = !(cropInteraction && cropInteraction.mode === "new");
+    const nextCrop = finalizeCropSelection(cropDraft, previewBounds, usePrev && hasCrop ? crop : null);
     if (!nextCrop) {
       setStatus("ドラッグして残したい範囲を選択してください。");
       setCropDraft(null);
@@ -1254,7 +1372,6 @@ export default function VideoEditorApp() {
             </div>
           ) : null}
           
-          
           <TimelineVisualizer
             playhead={playhead}
             selectionStart={selectedRange.start}
@@ -1294,10 +1411,75 @@ export default function VideoEditorApp() {
               );
             })
           ) : (
-            <div className="clipboard-empty">クリップがありません。範囲を選んでコピーしてください。</div>
-          )}
+            <div className="clipboard-empty">コピーした範囲はここに表示されます。</div>
+          )}          
         </div>
       </div>
+
+      {/* Crop coordinates display */}
+      <div className="preview-crop-coords">
+
+        {/* Numeric crop form with unit toggle */}
+        {previewBounds ? (
+          <div className="crop-form">
+            <strong>数値で指定</strong>
+            <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "flex-end" }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input type="radio" name="crop-unit" checked={cropFormUnit === "%"} onChange={() => setCropFormUnit("%")} />%
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input type="radio" name="crop-unit" checked={cropFormUnit === "px"} onChange={() => setCropFormUnit("px")} />px
+                </label>
+              </div>
+
+              <label style={{ display: "flex", flexDirection: "column" }}>
+                {cropFormUnit === "%" ? "left %" : "left (px)"}
+                <input type="number" value={cropForm.left} onChange={(e) => handleCropFormChange("left", e.target.value)} style={{ width: 80 }} />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column" }}>
+                {cropFormUnit === "%" ? "top %" : "top (px)"}
+                <input type="number" value={cropForm.top} onChange={(e) => handleCropFormChange("top", e.target.value)} style={{ width: 80 }} />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column" }}>
+                {cropFormUnit === "%" ? "width %" : "width (px)"}
+                <input type="number" value={cropForm.width} onChange={(e) => handleCropFormChange("width", e.target.value)} style={{ width: 80 }} />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column" }}>
+                {cropFormUnit === "%" ? "height %" : "height (px)"}
+                <input type="number" value={cropForm.height} onChange={(e) => handleCropFormChange("height", e.target.value)} style={{ width: 80 }} />
+              </label>
+              <div style={{ display: "flex", alignItems: "flex-end" }}>
+                <button type="button" className="secondary-button" onClick={applyCropFromForm} disabled={isExporting}>適用</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {/* Preset save UI */}
+        <div style={{ marginTop: 8, marginBottom: 8 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input placeholder="preset name" value={presetName} onChange={(e) => setPresetName(e.target.value)} style={{ flex: 1 }} />
+            <button type="button" className="secondary-button" onClick={handleSaveCropPreset} disabled={!hasCrop}>保存</button>
+          </div>
+
+          {cropPresets.length ? (
+            <div style={{ marginTop: 8 }}>
+              <strong>保存済み presets</strong>
+              <ul style={{ listStyle: "none", padding: 0, margin: "6px 0 0 0" }}>
+                {cropPresets.map((p) => (
+                  <li key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <div style={{ flex: 1 }}>{p.name}</div>
+                    <div style={{ color: "#666", fontSize: 12 }}>{(p.crop && p.crop.left != null) ? `${p.crop.left.toFixed(2)}% / ${p.crop.top.toFixed(2)}%` : "-"}</div>
+                    <button type="button" className="ghost-button" onClick={() => handleApplyCropPreset(p)}>適用</button>
+                    <button type="button" className="timeline-item-delete" onClick={() => handleDeletePreset(p.id)}>削除</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
 
       <div className="action-row action-row--secondary preview-crop-actions">
         <div className="action-row action-row--tools">
@@ -1305,7 +1487,7 @@ export default function VideoEditorApp() {
             <span className="button-content"><span className="button-icon" aria-hidden="true">⧉</span><span>コピー</span></span>
           </button>
           <button type="button" onClick={handleCut} disabled={!segments.length || isExporting}>
-            <span className="button-content"><span className="button-icon" aria-hidden="true">✂</span><span>カット</span></span>
+            <span className="button-content"><span className="button-icon" aria-hidden="true">✂</span><span>カット(S)</span></span>
           </button>
           <button type="button" className="danger-button" onClick={handleDelete} disabled={!segments.length || isExporting}>
             <span className="button-content"><span className="button-icon" aria-hidden="true">⌦</span><span>削除</span></span>
@@ -1405,7 +1587,41 @@ export default function VideoEditorApp() {
                 <span>ソース: {sourceName || "未選択"}</span>
                 <span>セグメント数: {segments.length}</span>
                 <span>出力映像長: {formatVideoTime(totalDuration)}</span>
-                <span>現在の crop: {formatCrop(crop)}</span>
+                {hasCrop ? (
+                  <table className="export-crop-table" style={{ borderCollapse: "collapse", marginTop: 6 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: "left", padding: 4 }}>項目</th>
+                        <th style={{ textAlign: "left", padding: 4 }}>%</th>
+                        <th style={{ textAlign: "left", padding: 4 }}>px</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td style={{ padding: 4 }}>left</td>
+                        <td style={{ padding: 4 }}>{(crop.left || 0).toFixed(2)}%</td>
+                        <td style={{ padding: 4 }}>{metadata.width ? Math.round((crop.left || 0) / 100 * metadata.width) + 'px' : '-'}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: 4 }}>top</td>
+                        <td style={{ padding: 4 }}>{(crop.top || 0).toFixed(2)}%</td>
+                        <td style={{ padding: 4 }}>{metadata.height ? Math.round((crop.top || 0) / 100 * metadata.height) + 'px' : '-'}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: 4 }}>right</td>
+                        <td style={{ padding: 4 }}>{(crop.right || 0).toFixed(2)}%</td>
+                        <td style={{ padding: 4 }}>{metadata.width ? Math.round((crop.right || 0) / 100 * metadata.width) + 'px' : '-'}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: 4 }}>bottom</td>
+                        <td style={{ padding: 4 }}>{(crop.bottom || 0).toFixed(2)}%</td>
+                        <td style={{ padding: 4 }}>{metadata.height ? Math.round((crop.bottom || 0) / 100 * metadata.height) + 'px' : '-'}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                ) : (
+                  <span>現在の crop: {formatCrop(crop)}</span>
+                )}
                 <span>音声: {metadata.hasAudio ? "あり" : "なし"}</span>
               </div>
 
