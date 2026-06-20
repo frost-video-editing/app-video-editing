@@ -15,7 +15,8 @@ export default function TimelineVisualizer({
   segments = [],
   onPlayheadChange = () => {},
   onSelectionStartChange = () => {},
-  onSelectionEndChange = () => {}
+  onSelectionEndChange = () => {},
+  onSegmentClick = () => {}
 }) {
   const containerRef = useRef(null);
   const [draggingMode, setDraggingMode] = useState(null); // null | 'playhead' | 'start' | 'end' | 'timeline'
@@ -111,6 +112,15 @@ export default function TimelineVisualizer({
         onMouseDown={handleTrackMouseDown}
         style={{ cursor: draggingMode === "timeline" ? "grabbing" : "pointer" }}
       >
+        {/* Top playhead bar for time selection */}
+        <div className="timeline-playhead-bar" onMouseDown={(e) => handleMouseDown(e, "playhead")}> 
+          <div
+            className="timeline-playhead-thumb"
+            style={{ left: `${(playheadPx / containerWidth) * 100}%` }}
+            onMouseDown={(e) => handleMouseDown(e, "playhead")}
+            title={`Current: ${formatTimeShort(playhead)}`}
+          />
+        </div>
         {/* Background bar */}
         <div className="timeline-background" />
 
@@ -119,22 +129,33 @@ export default function TimelineVisualizer({
           {safeSegments.map((segment, index) => {
             const duration = Math.max(0, Number(segment.end) - Number(segment.start));
             const widthPct = totalDuration > 0 ? (duration / totalDuration) * 100 : 0;
+            const isSelected = Number(selectionStart) === Number(segment.start) && Number(selectionEnd) === Number(segment.end);
+
+            const handleSegmentClick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onSelectionStartChange(Number(segment.start));
+              onSelectionEndChange(Number(segment.end));
+              onPlayheadChange(Number(segment.start));
+              onSegmentClick(segment, index);
+            };
+
             return (
               <div
                 key={`segment-${index}-${segment.start}-${segment.end}`}
-                className="timeline-segment-block"
-                style={{ width: `${Math.max(widthPct, 0)}%` }}
+                className={`timeline-segment-block${isSelected ? " timeline-segment-block--selected" : ""}`}
+                style={{ width: `${Math.max(widthPct, 0)}%`, cursor: "pointer" }}
                 title={`${formatTimeShort(segment.start)} - ${formatTimeShort(segment.end)}`}
+                onMouseDown={handleSegmentClick}
               />
             );
           })}
         </div>
 
-        {/* Playhead scrubber */}
+        {/* Playhead scrubber (decorative) */}
         <div
           className="timeline-scrubber"
           style={{ left: `${(playheadPx / containerWidth) * 100}%` }}
-          onMouseDown={(e) => handleMouseDown(e, "playhead")}
           title={`Current: ${formatTimeShort(playhead)}`}
         />
       </div>

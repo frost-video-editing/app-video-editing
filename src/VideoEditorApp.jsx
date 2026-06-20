@@ -19,6 +19,7 @@ import {
   getPreviewPoint as getCropPreviewPoint,
   normalizeCropInput,
   updateCropDraft
+  , createDraftFromCropPercent
 } from "./components/button/crop.jsx";
 
 const emptyCrop = { left: 0, top: 0, right: 0, bottom: 0 };
@@ -60,6 +61,8 @@ export default function VideoEditorApp() {
   const [playhead, setPlayhead] = useState(0);
   const [crop, setCrop] = useState(emptyCrop);
   const [clipboard, setClipboard] = useState([]);
+  const [clipBank, setClipBank] = useState([]); // saved clip buttons
+  const [selectedClipIndex, setSelectedClipIndex] = useState(null);
   const [cutMarkers, setCutMarkers] = useState([]); // array of { start, end }
   const [outputPath, setOutputPath] = useState("");
   const [isExportConfirmOpen, setIsExportConfirmOpen] = useState(false);
@@ -80,6 +83,7 @@ export default function VideoEditorApp() {
   const [previewBounds, setPreviewBounds] = useState(null);
   const [isCropSelecting, setIsCropSelecting] = useState(false);
   const [cropDraft, setCropDraft] = useState(null);
+  const [cropInteraction, setCropInteraction] = useState(null); // { mode, originDraft, pointerStart }
   const [previewLoadProgress, setPreviewLoadProgress] = useState(0);
   const [previewLoadedUntil, setPreviewLoadedUntil] = useState(0);
   const [previewLoadMessage, setPreviewLoadMessage] = useState("未読み込み");
@@ -124,14 +128,22 @@ export default function VideoEditorApp() {
     // Use uniform scaling to avoid non-uniform stretching.
     const scale = 100 / Math.max(keptWidth, keptHeight);
 
+    // Center the cropped region: compute the crop center and offset
+    // so the crop's center aligns with the viewport center after scaling.
+    const centerX = crop.left + keptWidth / 2;
+    const centerY = crop.top + keptHeight / 2;
+    const offsetX = centerX - 50; // percent offset relative to center
+    const offsetY = centerY - 50;
+
     return {
       position: "absolute",
-      inset: 0,
+      left: "50%",
+      top: "50%",
       width: "100%",
       height: "100%",
       objectFit: "cover",
-      transformOrigin: "top left",
-      transform: `scale(${scale}) translate(-${crop.left}%, -${crop.top}%)`
+      transformOrigin: "center center",
+      transform: `translate(calc(-50% - ${offsetX}%), calc(-50% - ${offsetY}%)) scale(${scale})`
     };
   }, [crop, hasCrop, isCropPreviewLocked]);
 
@@ -270,6 +282,7 @@ export default function VideoEditorApp() {
   function resetCropSelection() {
     setCropDraft(null);
     setIsCropSelecting(false);
+    setCropInteraction(null);
   }
 
   function setPlayheadWithPreview(nextPlayhead) {
@@ -297,6 +310,7 @@ export default function VideoEditorApp() {
       selectionEnd,
       playhead,
       clipboard: cloneSegments(clipboard),
+      clipBank: Array.isArray(clipBank) ? clipBank.map((c) => cloneSegments(c)) : [],
       cutMarkers: Array.isArray(cutMarkers) ? cutMarkers.map((m) => (m && typeof m === 'object' ? { start: m.start, end: m.end } : { start: Number(m) || 0, end: Number(m) || 0 })) : [],
       crop: { ...crop },
       isCropPreviewLocked,
@@ -319,6 +333,7 @@ export default function VideoEditorApp() {
     setSelectionEnd(snapshot.selectionEnd);
     setPlayheadWithPreview(snapshot.playhead);
     setClipboard(cloneSegments(snapshot.clipboard));
+    setClipBank(Array.isArray(snapshot.clipBank) ? snapshot.clipBank.map((c) => cloneSegments(c)) : []);
 
     // Restore cut markers. Markers may be stored as source times or timeline times.
     // If a marker's start maps to a timeline position within the composed timeline,
@@ -582,6 +597,37 @@ export default function VideoEditorApp() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleTogglePreviewPlayback]);
 
+  // Global shortcut: T Key for `handleCut` (split at current playhead).
+  useEffect(() => {
+    function onCutShortcut(e) {
+      if (e.repeat) return;
+      // Support T
+      if (e.code === "KeyT") {
+        const target = e.target;
+        const tag = target && target.tagName ? String(target.tagName).toLowerCase() : null;
+        if (tag === "input" || tag === "textarea" || target?.isContentEditable) {
+          return;
+        }
+        e.preventDefault?.();
+
+        if (!segments.length || isExporting) {
+          setErrorText("切り取りできる動画が読み込まれていないか、出力中のため操作できません。");
+          return;
+        }
+
+        try {
+          handleCut();
+        } catch (err) {
+          console.error("Shortcut handleCut failed", err);
+          setErrorText("ショートカットの実行に失敗しました。コンソールを確認してください。");
+        }
+      }
+    }
+
+    window.addEventListener("keydown", onCutShortcut);
+    return () => window.removeEventListener("keydown", onCutShortcut);
+  }, [segments.length, isExporting, handleCut]);
+
   function handleSplitAtPreview() {
     if (!segments.length) {
       setErrorText("先に動画を読み込んでください。");
@@ -640,17 +686,42 @@ export default function VideoEditorApp() {
 
 
   function handlePreviewPointerDown(event) {
-    if (!isCropSelecting) {
-      return;
-    }
-
     const point = getPreviewPoint(event.clientX, event.clientY);
-    if (!point) {
-      return;
-    }
+    if (!point) return;
+
+    // If not currently in crop selection mode, do nothing.
+    if (!isCropSelecting) return;
 
     event.preventDefault();
     event.currentTarget.setPointerCapture?.(event.pointerId);
+
+    // If there's an existing draft...
+    if (cropDraft) {
+      // If the draft covers the full locked viewport (we initialized it to full),
+      // start a new inner selection when dragging inside, instead of moving the draft.
+      const isFullViewportDraft = previewBounds &&
+        cropDraft.startX === 0 && cropDraft.startY === 0 &&
+        cropDraft.endX === previewBounds.width && cropDraft.endY === previewBounds.height;
+
+      if (isFullViewportDraft && hasCrop) {
+        // begin a fresh inner selection anchored at pointer
+        setCropDraft({ startX: point.x, startY: point.y, endX: point.x, endY: point.y });
+        return;
+      }
+
+      // Otherwise if pointer is inside the current draft, start a move interaction.
+      const left = Math.min(cropDraft.startX, cropDraft.endX);
+      const top = Math.min(cropDraft.startY, cropDraft.endY);
+      const right = Math.max(cropDraft.startX, cropDraft.endX);
+      const bottom = Math.max(cropDraft.startY, cropDraft.endY);
+
+      if (point.x >= left && point.x <= right && point.y >= top && point.y <= bottom) {
+        setCropInteraction({ mode: "move", originDraft: { ...cropDraft }, pointerStart: { x: point.x, y: point.y } });
+        return;
+      }
+    }
+
+    // Otherwise begin/resume a new selection from the pointer location.
     setCropDraft({ startX: point.x, startY: point.y, endX: point.x, endY: point.y });
   }
 
@@ -658,10 +729,17 @@ export default function VideoEditorApp() {
     if (!sourceUrl || !previewBounds) {
       return;
     }
-
-    setCropDraft(null);
+    // If there's an existing crop, lock preview to that crop and initialize the draft
+    // to cover the whole cropped viewport so the confirmed crop appears full-screen
+    // and further adjustments are limited to inside it.
+    if (hasCrop) {
+      setIsCropPreviewLocked(true);
+      setCropDraft({ startX: 0, startY: 0, endX: previewBounds.width, endY: previewBounds.height });
+    } else {
+      setIsCropPreviewLocked(false);
+      setCropDraft(null);
+    }
     setIsCropSelecting(true);
-    setIsCropPreviewLocked(false);
     setStatus("プレビュー上をドラッグして、残したい範囲を指定してください。");
   }
 
@@ -687,27 +765,42 @@ export default function VideoEditorApp() {
   }
 
   function handlePreviewPointerMove(event) {
-    if (!cropDraft) {
+    if (!cropDraft) return;
+    const point = getPreviewPoint(event.clientX, event.clientY);
+    if (!point) return;
+
+    if (cropInteraction && cropInteraction.mode === "move") {
+      const dx = point.x - cropInteraction.pointerStart.x;
+      const dy = point.y - cropInteraction.pointerStart.y;
+      const origin = cropInteraction.originDraft;
+
+      const newStartX = clamp(origin.startX + dx, 0, previewBounds.width);
+      const newEndX = clamp(origin.endX + dx, 0, previewBounds.width);
+      const newStartY = clamp(origin.startY + dy, 0, previewBounds.height);
+      const newEndY = clamp(origin.endY + dy, 0, previewBounds.height);
+
+      // Ensure we don't invert the rectangle accidentally by clamping both sides.
+      setCropDraft({ startX: newStartX, startY: newStartY, endX: newEndX, endY: newEndY });
       return;
     }
 
-    const point = getPreviewPoint(event.clientX, event.clientY);
-    if (!point) {
-      return;
-    }
     setCropDraft((current) => updateCropDraft(current, point, previewBounds));
   }
 
   function handlePreviewPointerUp(event) {
-    if (!cropDraft) {
-      return;
-    }
+    if (!cropDraft) return;
 
     event.currentTarget.releasePointerCapture?.(event.pointerId);
-    const nextCrop = finalizeCropSelection(cropDraft, previewBounds);
+    // If we were moving, clear the interaction and then finalize the moved draft.
+    if (cropInteraction && cropInteraction.mode === "move") {
+      setCropInteraction(null);
+    }
+
+    const nextCrop = finalizeCropSelection(cropDraft, previewBounds, hasCrop ? crop : null);
     if (!nextCrop) {
       setStatus("ドラッグして残したい範囲を選択してください。");
       setCropDraft(null);
+      setCropInteraction(null);
       return;
     }
 
@@ -715,7 +808,10 @@ export default function VideoEditorApp() {
     setCrop(nextCrop);
     setCropDraft(null);
     setIsCropSelecting(false);
-    setIsCropPreviewLocked(false);
+    // Lock preview to the newly confirmed crop so the preview shows only the
+    // selected area (prevents reverting to the previous visual state).
+    setIsCropPreviewLocked(true);
+    setCropInteraction(null);
     setErrorText("");
     setStatus("プレビューで crop 範囲を更新しました。");
   }
@@ -866,6 +962,7 @@ export default function VideoEditorApp() {
       return;
     }
     setClipboard(copied);
+    setClipBank((current) => [copied, ...current].slice(0, 20));
     setPlayheadWithPreview(selectedRange.end);
     setStatus(`範囲をコピーしました。長さ ${formatVideoTime(timelineDuration(copied))}`);
     setErrorText("");
@@ -943,6 +1040,19 @@ export default function VideoEditorApp() {
     setSelectionEnd(playhead + insertedDuration);
     setPlayheadWithPreview(playhead + insertedDuration);
     setStatus(`貼り付けました。長さ ${formatVideoTime(insertedDuration)} を挿入しました。`);
+    setErrorText("");
+  }
+
+  function handleInsertClip(clip) {
+    if (!clip) return;
+    pushUndoSnapshot();
+    const nextSegments = insertSegmentsAt(segments, playhead, Array.isArray(clip) ? clip : [clip]);
+    setSegments(nextSegments);
+    const insertedDuration = timelineDuration(Array.isArray(clip) ? clip : [clip]);
+    setSelectionStart(playhead);
+    setSelectionEnd(playhead + insertedDuration);
+    setPlayheadWithPreview(playhead + insertedDuration);
+    setStatus(`クリップを挿入しました。長さ ${formatVideoTime(insertedDuration)}`);
     setErrorText("");
   }
 
@@ -1098,7 +1208,7 @@ export default function VideoEditorApp() {
                     onError={handlePreviewVideoError}
                   />
                 </div>
-                {previewBounds && !isCropPreviewLocked ? (
+                {previewBounds && (!isCropPreviewLocked || isCropSelecting) ? (
                   <div
                     className={`preview-crop-overlay${isCropSelecting ? " preview-crop-overlay--interactive" : ""}`}
                     style={{
@@ -1146,16 +1256,48 @@ export default function VideoEditorApp() {
           
           
           <TimelineVisualizer
-        playhead={playhead}
-        selectionStart={selectedRange.start}
-        selectionEnd={selectedRange.end}
-        totalDuration={totalDuration}
-        segments={segments}
-        markers={cutMarkers}
-        onPlayheadChange={setPlayheadWithPreview}
-        onSelectionStartChange={setSelectionStart}
-        onSelectionEndChange={setSelectionEnd}
-      />
+            playhead={playhead}
+            selectionStart={selectedRange.start}
+            selectionEnd={selectedRange.end}
+            totalDuration={totalDuration}
+            segments={segments}
+            markers={cutMarkers}
+            onPlayheadChange={setPlayheadWithPreview}
+            onSelectionStartChange={setSelectionStart}
+            onSelectionEndChange={setSelectionEnd}
+          />
+
+      {/* clip chooser */}
+      <div className="clipboard-strip">
+        <div className="clipboard-strip-head">クリップ</div>
+        <div className="clipboard-items">
+          {clipBank.length ? (
+            clipBank.map((clip, idx) => {
+              const dur = timelineDuration(clip);
+              const start = clip[0]?.start || 0;
+              const end = clip[clip.length - 1]?.end || 0;
+              return (
+                <div className="clip-item" key={`clip-${idx}-${start}-${end}`}>
+                  <button
+                    type="button"
+                    className={`clip-button${selectedClipIndex === idx ? " clip-button--selected" : ""}`}
+                    onClick={() => { setClipboard(clip); setSelectionStart(start); setSelectionEnd(end); setSelectedClipIndex(idx); }}
+                  >
+                    {formatVideoTime(start)} - {formatVideoTime(end)} ({formatVideoTime(dur)})
+                  </button>
+                  <div className="clip-actions">
+                    <button type="button" className="ghost-button seek-button" onClick={() => setPlayheadWithPreview(start)}>再生位置へ</button>
+                    <button type="button" className="ghost-button" onClick={() => handleInsertClip(clip)}>挿入</button>
+                    <button type="button" className="timeline-item-delete" onClick={() => setClipBank((c) => c.filter((_, i) => i !== idx))}>削除</button>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="clipboard-empty">クリップがありません。範囲を選んでコピーしてください。</div>
+          )}
+        </div>
+      </div>
 
       <div className="action-row action-row--secondary preview-crop-actions">
         <div className="action-row action-row--tools">
