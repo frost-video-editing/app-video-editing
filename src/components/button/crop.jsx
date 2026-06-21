@@ -1,185 +1,100 @@
-import { clamp } from "../../lib/videoTimeline.js";
+import React from "react";
+import {
+  normalizeCropInput,
+  getPreviewPoint,
+  createDraftFromCropPercent,
+  updateCropDraft,
+  getDraftCropBoxStyle,
+  computeCropPercentFromDraft,
+  finalizeCropSelection
+} from "../../lib/crop.js";
 
-const MIN_CROP_BOX_SIZE = 12;
-const MAX_CROP_SUM = 99;
+export {
+  normalizeCropInput,
+  getPreviewPoint,
+  createDraftFromCropPercent,
+  updateCropDraft,
+  getDraftCropBoxStyle,
+  computeCropPercentFromDraft,
+  finalizeCropSelection
+};
 
-function scaleCropAxis(startPercent, endPercent) {
-  const total = startPercent + endPercent;
-  if (total <= MAX_CROP_SUM) {
-    return [startPercent, endPercent];
-  }
+export function CropControls({
+  previewBounds,
+  cropForm,
+  cropFormUnit,
+  setCropFormUnit,
+  handleCropFormChange,
+  applyCropFromForm,
+  isExporting,
+  presetName,
+  setPresetName,
+  handleSaveCropPreset,
+  cropPresets,
+  handleApplyCropPreset,
+  handleDeletePreset,
+  hasCrop
+}) {
+  return (
+    <div className="preview-crop-coords">
+      {previewBounds ? (
+        <div className="crop-form">
+          <strong>数値で指定</strong>
+          <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "flex-end" }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <input type="radio" name="crop-unit" checked={cropFormUnit === "%"} onChange={() => setCropFormUnit("%")} />%
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <input type="radio" name="crop-unit" checked={cropFormUnit === "px"} onChange={() => setCropFormUnit("px")} />px
+              </label>
+            </div>
 
-  const scale = MAX_CROP_SUM / total;
-  return [startPercent * scale, endPercent * scale];
-}
+            <label style={{ display: "flex", flexDirection: "column" }}>
+              {cropFormUnit === "%" ? "left %" : "left (px)"}
+              <input type="number" value={cropForm.left} onChange={(e) => handleCropFormChange("left", e.target.value)} style={{ width: 80 }} />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column" }}>
+              {cropFormUnit === "%" ? "top %" : "top (px)"}
+              <input type="number" value={cropForm.top} onChange={(e) => handleCropFormChange("top", e.target.value)} style={{ width: 80 }} />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column" }}>
+              {cropFormUnit === "%" ? "width %" : "width (px)"}
+              <input type="number" value={cropForm.width} onChange={(e) => handleCropFormChange("width", e.target.value)} style={{ width: 80 }} />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column" }}>
+              {cropFormUnit === "%" ? "height %" : "height (px)"}
+              <input type="number" value={cropForm.height} onChange={(e) => handleCropFormChange("height", e.target.value)} style={{ width: 80 }} />
+            </label>
+            <div style={{ display: "flex", alignItems: "flex-end" }}>
+              <button type="button" className="secondary-button" onClick={applyCropFromForm} disabled={isExporting}>適用</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
-// Clamp crop percentages while keeping at least 1% of the frame on each axis.
-export function normalizeCropInput(nextCrop) {
-  const left = clamp(Number(nextCrop?.left) || 0, 0, MAX_CROP_SUM);
-  const top = clamp(Number(nextCrop?.top) || 0, 0, MAX_CROP_SUM);
-  const right = clamp(Number(nextCrop?.right) || 0, 0, MAX_CROP_SUM);
-  const bottom = clamp(Number(nextCrop?.bottom) || 0, 0, MAX_CROP_SUM);
+      <div style={{ marginTop: 8, marginBottom: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input placeholder="preset name" value={presetName} onChange={(e) => setPresetName(e.target.value)} style={{ flex: 1 }} />
+          <button type="button" className="secondary-button" onClick={handleSaveCropPreset} disabled={!hasCrop}>保存</button>
+        </div>
 
-  const [safeLeft, safeRight] = scaleCropAxis(left, right);
-  const [safeTop, safeBottom] = scaleCropAxis(top, bottom);
-
-  return {
-    left: safeLeft,
-    top: safeTop,
-    right: safeRight,
-    bottom: safeBottom
-  };
-}
-
-// Convert a client pointer position into preview-relative coordinates.
-export function getPreviewPoint(clientX, clientY, stageRect, previewBounds) {
-  if (!stageRect || !previewBounds) {
-    return null;
-  }
-
-  return {
-    x: clamp(clientX - stageRect.left - previewBounds.left, 0, previewBounds.width),
-    y: clamp(clientY - stageRect.top - previewBounds.top, 0, previewBounds.height)
-  };
-}
-
-// Create a cropDraft (pixel coordinates) from normalized percent crop and preview bounds
-export function createDraftFromCropPercent(crop, previewBounds) {
-  if (!previewBounds || !crop) return null;
-
-  const leftPx = (Number(crop.left) || 0) / 100 * previewBounds.width;
-  const topPx = (Number(crop.top) || 0) / 100 * previewBounds.height;
-  const rightPx = (Number(crop.right) || 0) / 100 * previewBounds.width;
-  const bottomPx = (Number(crop.bottom) || 0) / 100 * previewBounds.height;
-
-  const startX = leftPx;
-  const startY = topPx;
-  const endX = previewBounds.width - rightPx;
-  const endY = previewBounds.height - bottomPx;
-
-  return { startX, startY, endX, endY };
-}
-
-// Update the current crop draft with a freely resizable rectangle.
-export function updateCropDraft(currentDraft, point, previewBounds) {
-  if (!currentDraft || !point || !previewBounds) {
-    return currentDraft;
-  }
-
-  return {
-    ...currentDraft,
-    endX: clamp(point.x, 0, previewBounds.width),
-    endY: clamp(point.y, 0, previewBounds.height)
-  };
-}
-
-// Build the overlay style for the current draft rectangle.
-export function getDraftCropBoxStyle(cropDraft, previewBounds) {
-  if (!cropDraft || !previewBounds) {
-    return null;
-  }
-
-  const { startX, startY, endX, endY } = cropDraft;
-  const left = Math.min(startX, endX);
-  const top = Math.min(startY, endY);
-  const width = Math.abs(endX - startX);
-  const height = Math.abs(endY - startY);
-
-  return {
-    left: `${(left / previewBounds.width) * 100}%`,
-    top: `${(top / previewBounds.height) * 100}%`,
-    width: `${(width / previewBounds.width) * 100}%`,
-    height: `${(height / previewBounds.height) * 100}%`
-  };
-}
-
-// Convert a draft rectangle into crop percentages for preview and export.
-export function computeCropPercentFromDraft(startX, startY, endX, endY, previewBounds) {
-  if (!previewBounds) {
-    return null;
-  }
-
-  const left = Math.min(startX, endX);
-  const top = Math.min(startY, endY);
-  const width = Math.abs(endX - startX);
-  const height = Math.abs(endY - startY);
-
-  return {
-    left: (left / previewBounds.width) * 100,
-    top: (top / previewBounds.height) * 100,
-    right: ((previewBounds.width - left - width) / previewBounds.width) * 100,
-    bottom: ((previewBounds.height - top - height) / previewBounds.height) * 100
-  };
-}
-
-// Finalize a crop draft into normalized percentages or return null for tiny drags.
-// If prevCrop is provided, compose the new crop inside the previous kept region.
-export function finalizeCropSelection(cropDraft, previewBounds, prevCrop) {
-  if (!cropDraft || !previewBounds) {
-    return null;
-  }
-
-  const width = Math.abs(cropDraft.endX - cropDraft.startX);
-  const height = Math.abs(cropDraft.endY - cropDraft.startY);
-  if (width < MIN_CROP_BOX_SIZE || height < MIN_CROP_BOX_SIZE) {
-    return null;
-  }
-
-  const draftPercent = computeCropPercentFromDraft(
-    cropDraft.startX,
-    cropDraft.startY,
-    cropDraft.endX,
-    cropDraft.endY,
-    previewBounds
+        {cropPresets.length ? (
+          <div style={{ marginTop: 8 }}>
+            <strong>保存済み presets</strong>
+            <ul style={{ listStyle: "none", padding: 0, margin: "6px 0 0 0" }}>
+              {cropPresets.map((p) => (
+                <li key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <div style={{ flex: 1 }}>{p.name}</div>
+                  <div style={{ color: "#666", fontSize: 12 }}>{(p.crop && p.crop.left != null) ? `${p.crop.left.toFixed(2)}% / ${p.crop.top.toFixed(2)}%` : "-"}</div>
+                  <button type="button" className="ghost-button" onClick={() => handleApplyCropPreset(p)}>適用</button>
+                  <button type="button" className="timeline-item-delete" onClick={() => handleDeletePreset(p.id)}>削除</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
-
-  if (!prevCrop) {
-    return normalizeCropInput(draftPercent);
-  }
-
-  // Compose prevCrop and draftPercent: compute relative draft within prev kept region
-  const W = previewBounds.width;
-  const H = previewBounds.height;
-
-  const prevLeftPx = (Number(prevCrop.left) || 0) / 100 * W;
-  const prevTopPx = (Number(prevCrop.top) || 0) / 100 * H;
-  const prevRightPx = (Number(prevCrop.right) || 0) / 100 * W;
-  const prevBottomPx = (Number(prevCrop.bottom) || 0) / 100 * H;
-
-  const prevWidthPx = W - prevLeftPx - prevRightPx;
-  const prevHeightPx = H - prevTopPx - prevBottomPx;
-
-  if (prevWidthPx <= 0 || prevHeightPx <= 0) {
-    return normalizeCropInput(draftPercent);
-  }
-
-  // Draft rectangle in pixels
-  const draftLeftPx = (draftPercent.left / 100) * W;
-  const draftTopPx = (draftPercent.top / 100) * H;
-  const draftRightPx = (draftPercent.right / 100) * W;
-  const draftBottomPx = (draftPercent.bottom / 100) * H;
-
-  // Clamp draft to prev region
-  const clampedLeftPx = Math.min(Math.max(draftLeftPx, prevLeftPx), prevLeftPx + prevWidthPx);
-  const clampedTopPx = Math.min(Math.max(draftTopPx, prevTopPx), prevTopPx + prevHeightPx);
-  const clampedRightPx = Math.min(Math.max(W - draftRightPx, prevLeftPx), prevLeftPx + prevWidthPx);
-  const clampedBottomPx = Math.min(Math.max(H - draftBottomPx, prevTopPx), prevTopPx + prevHeightPx);
-
-  // Relative positions within prev region
-  const relLeft = (clampedLeftPx - prevLeftPx) / prevWidthPx;
-  const relTop = (clampedTopPx - prevTopPx) / prevHeightPx;
-  const relRight = (prevLeftPx + prevWidthPx - clampedRightPx) / prevWidthPx;
-  const relBottom = (prevTopPx + prevHeightPx - clampedBottomPx) / prevHeightPx;
-
-  const prevKeptW = 100 - (Number(prevCrop.left) || 0) - (Number(prevCrop.right) || 0);
-  const prevKeptH = 100 - (Number(prevCrop.top) || 0) - (Number(prevCrop.bottom) || 0);
-
-  const combined = {
-    left: (Number(prevCrop.left) || 0) + relLeft * prevKeptW,
-    top: (Number(prevCrop.top) || 0) + relTop * prevKeptH,
-    right: (Number(prevCrop.right) || 0) + relRight * prevKeptW,
-    bottom: (Number(prevCrop.bottom) || 0) + relBottom * prevKeptH
-  };
-
-  return normalizeCropInput(combined);
 }

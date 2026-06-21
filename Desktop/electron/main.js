@@ -448,6 +448,7 @@ async function exportSingleSegment({
   segment,
   sourceInfo,
   cropFilter,
+  audioOptions = {},
   startProgress,
   endProgress,
   progressMessage,
@@ -456,10 +457,19 @@ async function exportSingleSegment({
   segmentsProgressArray = null,
   segmentIndex = null
 }) {
-  const videoPreset = cropFilter ? "ultrafast" : "veryfast";
-  const videoCrf = cropFilter ? "20" : "18";
+  // Use higher-quality encode settings when crop/rescale is applied.
+  // Use a faster preset than "slow" to avoid large slowdowns while keeping quality.
+  const videoPreset = cropFilter ? "fast" : "veryfast";
+  const videoCrf = cropFilter ? "18" : "18";
 
-  if (!cropFilter) {
+  const hasAudioAdjustments = audioOptions && (
+    (Number.isFinite(Number(audioOptions.gainDb)) && Number(audioOptions.gainDb) !== 0) ||
+    (Number(audioOptions.fadeIn) > 0) ||
+    (Number(audioOptions.fadeOut) > 0) ||
+    Boolean(audioOptions.normalize)
+  );
+
+  if (!cropFilter && !hasAudioAdjustments) {
     try {
       const fastArgs = ["-y"];
 
@@ -535,14 +545,44 @@ async function exportSingleSegment({
     const scaleFilter = (targetWidth && targetHeight) ? `,scale=${targetWidth}:${targetHeight}:flags=lanczos` : "";
     const vfFilter = `${cropFilter}${scaleFilter}`;
 
-    args.push("-vf", vfFilter, "-c:v", "libx264", "-preset", videoPreset, "-crf", videoCrf, "-pix_fmt", "yuv420p", "-threads", "0");
+    args.push(
+      "-vf", vfFilter,
+      "-c:v", "libx264",
+      "-preset", videoPreset,
+      "-crf", videoCrf,
+      "-profile:v", "high",
+      "-level", "4.0",
+      "-x264-params", "aq-mode=3:aq-strength=1.0",
+      "-pix_fmt", "yuv420p",
+      "-threads", "0"
+    );
     if (sourceInfo.hasAudio) {
+      // build audio filter chain if adjustments requested
+      const afilters = [];
+      const gainPercent = Number(audioOptions.gainPercent || 100);
+      const multiplier = Math.max(0, gainPercent / 100);
+      if (Number.isFinite(multiplier) && multiplier !== 1) afilters.push(`volume=${multiplier}`);
+      if (audioOptions.normalize) afilters.push("dynaudnorm");
+
+      if (afilters.length > 0) {
+        args.push("-af", afilters.join(","));
+      }
+
       args.push("-c:a", "aac", "-b:a", "192k");
     } else {
       args.push("-an");
     }
   } else if (sourceInfo.hasAudio) {
-    args.push("-c:v", "libx264", "-preset", videoPreset, "-crf", videoCrf, "-pix_fmt", "yuv420p", "-threads", "0", "-c:a", "aac", "-b:a", "192k");
+    // no crop, but we may still need audio adjustments; include -af when requested
+    const afilters = [];
+    const gainPercent = Number(audioOptions.gainPercent || 100);
+    const multiplier = Math.max(0, gainPercent / 100);
+    if (Number.isFinite(multiplier) && multiplier !== 1) afilters.push(`volume=${multiplier}`);
+    if (audioOptions.normalize) afilters.push("dynaudnorm");
+
+    args.push("-c:v", "libx264", "-preset", videoPreset, "-crf", videoCrf, "-pix_fmt", "yuv420p", "-threads", "0");
+    if (afilters.length > 0) args.push("-af", afilters.join(","));
+    args.push("-c:a", "aac", "-b:a", "192k");
   } else {
     args.push("-c:v", "libx264", "-preset", videoPreset, "-crf", videoCrf, "-pix_fmt", "yuv420p", "-threads", "0", "-an");
   }
@@ -688,6 +728,12 @@ async function exportVideo(payload = {}) {
   const cropFilter = buildCropFilter(crop, sourceInfo.width || 1, sourceInfo.height || 1);
   const videoPreset = cropFilter ? "ultrafast" : "veryfast";
   const videoCrf = cropFilter ? "20" : "18";
+  // audio adjustment options from payload (percent-based volume)
+  const audioOptions = {
+    gainPercent: payload.audioGainPercent != null ? Number(payload.audioGainPercent) : 100,
+    normalize: Boolean(payload.audioNormalize)
+  };
+  const hasAudioAdjustments = (Number.isFinite(audioOptions.gainPercent) && Number(audioOptions.gainPercent) !== 100) || audioOptions.normalize;
   const validSegments = segments
     .map((segment) => {
       const start = Math.max(0, Number(segment.start) || 0);
@@ -754,6 +800,7 @@ async function exportVideo(payload = {}) {
           segment,
           sourceInfo,
           cropFilter,
+          audioOptions,
           startProgress,
           endProgress,
           progressMessage: `タイムライン ${index + 1}/${totalSegments} を出力中...`,
@@ -894,8 +941,20 @@ async function exportVideo(payload = {}) {
 
     if (sourceInfo.hasAudio) {
       const audioLabel = `a${index}`;
+      const audioFilters = [
+        `atrim=start=${formatTimestamp(segment.start)}:end=${formatTimestamp(segment.end)}`,
+        "asetpts=PTS-STARTPTS"
+      ];
+
+      if (hasAudioAdjustments) {
+        const gainPercent = Number(audioOptions.gainPercent || 100);
+        const multiplier = Math.max(0, gainPercent / 100);
+        if (Number.isFinite(multiplier) && multiplier !== 1) audioFilters.push(`volume=${multiplier}`);
+        if (audioOptions.normalize) audioFilters.push("dynaudnorm");
+      }
+
       filterParts.push(
-        `[0:a]atrim=start=${formatTimestamp(segment.start)}:end=${formatTimestamp(segment.end)},asetpts=PTS-STARTPTS[${audioLabel}]`
+        `[0:a]${audioFilters.join(",")}[${audioLabel}]`
       );
       concatInputs.push(`[${audioLabel}]`);
     }

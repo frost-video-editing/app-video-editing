@@ -18,6 +18,7 @@ import ButtonContent from "./components/button/button-content";
 import {
   finalizeCropSelection,
   getDraftCropBoxStyle,
+  CropControls,
   getPreviewPoint as getCropPreviewPoint,
   normalizeCropInput,
   updateCropDraft
@@ -94,6 +95,12 @@ export default function VideoEditorApp() {
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [previewPlaybackRate, setPreviewPlaybackRate] = useState(1);
   const [isCropPreviewLocked, setIsCropPreviewLocked] = useState(false);
+  const [audioGainPercent, setAudioGainPercent] = useState(100);
+  const [audioNormalize, setAudioNormalize] = useState(false);
+  const audioContextRef = useRef(null);
+  const audioSourceRef = useRef(null);
+  const audioGainNodeRef = useRef(null);
+  const audioCompressorRef = useRef(null);
   const [undoStack, setUndoStack] = useState([]);
   const [cropForm, setCropForm] = useState({ left: 0, top: 0, width: 100, height: 100 });
   const [cropFormUnit, setCropFormUnit] = useState("%"); // "%" or "px"
@@ -464,6 +471,8 @@ export default function VideoEditorApp() {
       clipBank: Array.isArray(clipBank) ? clipBank.map((c) => cloneSegments(c)) : [],
       cutMarkers: Array.isArray(cutMarkers) ? cutMarkers.map((m) => (m && typeof m === 'object' ? { start: m.start, end: m.end } : { start: Number(m) || 0, end: Number(m) || 0 })) : [],
       crop: { ...crop },
+      audioGainPercent: Number(audioGainPercent || 100),
+      audioNormalize: Boolean(audioNormalize),
       isCropPreviewLocked,
       outputPath,
       previewCurrentTime
@@ -502,6 +511,9 @@ export default function VideoEditorApp() {
       : [];
     setCutMarkers(restoredMarkers);
     setCrop({ ...snapshot.crop });
+    // restore audio settings if present
+    if (snapshot && typeof snapshot.audioGainPercent !== 'undefined') setAudioGainPercent(Number(snapshot.audioGainPercent || 100));
+    if (snapshot && typeof snapshot.audioNormalize !== 'undefined') setAudioNormalize(Boolean(snapshot.audioNormalize));
     setIsCropPreviewLocked(Boolean(snapshot.isCropPreviewLocked));
     setOutputPath(snapshot.outputPath);
     setPreviewCurrentTime(snapshot.previewCurrentTime || 0);
@@ -719,7 +731,85 @@ export default function VideoEditorApp() {
     if (v) {
       v.playbackRate = previewPlaybackRate;
     }
-  }, [previewPlaybackRate]);
+    // initialize WebAudio graph for preview audio
+    try {
+      if (audioContextRef.current == null && typeof window !== 'undefined' && window.AudioContext) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const ctx = audioContextRef.current;
+      if (ctx && v) {
+        // reconnect source if needed
+        if (audioSourceRef.current) {
+          try { audioSourceRef.current.disconnect(); } catch (e) {}
+          audioSourceRef.current = null;
+        }
+        const src = ctx.createMediaElementSource(v);
+        audioSourceRef.current = src;
+
+        // create gain node
+        if (!audioGainNodeRef.current) audioGainNodeRef.current = ctx.createGain();
+        const gainNode = audioGainNodeRef.current;
+
+        // compressor for normalize-like behavior
+        if (!audioCompressorRef.current) audioCompressorRef.current = ctx.createDynamicsCompressor();
+        const comp = audioCompressorRef.current;
+
+        // connect chain: source -> (compressor?) -> gain -> destination
+        try { src.disconnect(); } catch (e) {}
+        if (audioNormalize) {
+          src.connect(comp);
+          comp.connect(gainNode);
+        } else {
+          src.connect(gainNode);
+        }
+        gainNode.connect(ctx.destination);
+      }
+      } catch (e) {
+      // ignore WebAudio init failures
+      console.warn('WebAudio init failed', e);
+    }
+    }, [previewPlaybackRate, sourceUrl, audioNormalize]);
+
+  // update audio parameters when options change
+  useEffect(() => {
+    const ctx = audioContextRef.current;
+    const gainNode = audioGainNodeRef.current;
+    if (!ctx || !gainNode) return;
+    const linear = Math.max(0, (Number(audioGainPercent) || 100) / 100);
+    try {
+      gainNode.gain.cancelScheduledValues(ctx.currentTime);
+      gainNode.gain.setValueAtTime(linear, ctx.currentTime);
+    } catch (e) {}
+    // enable/disable compressor connection
+    const src = audioSourceRef.current;
+    const comp = audioCompressorRef.current;
+    if (src && comp && gainNode) {
+      try {
+        src.disconnect();
+      } catch (e) {}
+      if (audioNormalize) {
+        src.connect(comp);
+        comp.disconnect();
+        comp.connect(gainNode);
+      } else {
+        try { comp.disconnect(); } catch (e) {}
+        src.connect(gainNode);
+      }
+    }
+  }, [audioGainPercent, audioNormalize]);
+
+  // apply gain changes to preview when percent or normalize changes
+  useEffect(() => {
+    const v = previewVideoRef.current;
+    const ctx = audioContextRef.current;
+    const gainNode = audioGainNodeRef.current;
+    if (!v || !ctx || !gainNode) return;
+    const linear = Math.max(0, (Number(audioGainPercent) || 100) / 100);
+    try {
+      gainNode.gain.cancelScheduledValues(ctx.currentTime);
+      gainNode.gain.setValueAtTime(linear, ctx.currentTime);
+    } catch (e) {}
+  }, [audioGainPercent, audioNormalize]);
 
   function handleTogglePreviewSpeed() {
     const next = previewPlaybackRate === 1 ? 0.5 : 1;
@@ -1212,7 +1302,9 @@ export default function VideoEditorApp() {
         sourcePath,
         outputPath: chosenOutput,
         segments: safeSegments,
-        crop: normalizeCropInput(crop)
+        crop: normalizeCropInput(crop),
+        audioGainPercent: Number(audioGainPercent || 100),
+        audioNormalize: Boolean(audioNormalize)
       });
       const outputPaths = Array.isArray(result?.outputPaths) && result.outputPaths.length
         ? result.outputPaths
@@ -1385,6 +1477,23 @@ export default function VideoEditorApp() {
             onSelectionEndChange={setSelectionEnd}
           />
 
+      {/* Audio controls for preview/editing (moved from export dialog) */}
+      {metadata.hasAudio ? (
+        <div style={{ margin: '12px 0', padding: 8, border: '1px solid #eee', borderRadius: 6 }}>
+          <h3 style={{ margin: '6px 0' }}>音声調整</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, alignItems: 'center' }}>
+            <label style={{ display: 'flex', flexDirection: 'column' }}>
+              ボリューム (%)
+              <input type="range" min="0" max="200" step="1" value={audioGainPercent} onChange={(e) => setAudioGainPercent(Number(e.target.value || 100))} />
+              <div style={{ fontSize: 12 }}>{audioGainPercent}%</div>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={audioNormalize} onChange={(e) => setAudioNormalize(Boolean(e.target.checked))} /> 正規化（簡易）
+            </label>
+          </div>
+        </div>
+      ) : null}
+
       {/* clip chooser */}
       <div className="clipboard-strip">
         <div className="clipboard-strip-head">クリップ</div>
@@ -1418,69 +1527,22 @@ export default function VideoEditorApp() {
       </div>
 
       {/* Crop coordinates display */}
-      <div className="preview-crop-coords">
-
-        {/* Numeric crop form with unit toggle */}
-        {previewBounds ? (
-          <div className="crop-form">
-            <strong>数値で指定</strong>
-            <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "flex-end" }}>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <input type="radio" name="crop-unit" checked={cropFormUnit === "%"} onChange={() => setCropFormUnit("%")} />%
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <input type="radio" name="crop-unit" checked={cropFormUnit === "px"} onChange={() => setCropFormUnit("px")} />px
-                </label>
-              </div>
-
-              <label style={{ display: "flex", flexDirection: "column" }}>
-                {cropFormUnit === "%" ? "left %" : "left (px)"}
-                <input type="number" value={cropForm.left} onChange={(e) => handleCropFormChange("left", e.target.value)} style={{ width: 80 }} />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column" }}>
-                {cropFormUnit === "%" ? "top %" : "top (px)"}
-                <input type="number" value={cropForm.top} onChange={(e) => handleCropFormChange("top", e.target.value)} style={{ width: 80 }} />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column" }}>
-                {cropFormUnit === "%" ? "width %" : "width (px)"}
-                <input type="number" value={cropForm.width} onChange={(e) => handleCropFormChange("width", e.target.value)} style={{ width: 80 }} />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column" }}>
-                {cropFormUnit === "%" ? "height %" : "height (px)"}
-                <input type="number" value={cropForm.height} onChange={(e) => handleCropFormChange("height", e.target.value)} style={{ width: 80 }} />
-              </label>
-              <div style={{ display: "flex", alignItems: "flex-end" }}>
-                <button type="button" className="secondary-button" onClick={applyCropFromForm} disabled={isExporting}>適用</button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-        {/* Preset save UI */}
-        <div style={{ marginTop: 8, marginBottom: 8 }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input placeholder="preset name" value={presetName} onChange={(e) => setPresetName(e.target.value)} style={{ flex: 1 }} />
-            <button type="button" className="secondary-button" onClick={handleSaveCropPreset} disabled={!hasCrop}>保存</button>
-          </div>
-
-          {cropPresets.length ? (
-            <div style={{ marginTop: 8 }}>
-              <strong>保存済み presets</strong>
-              <ul style={{ listStyle: "none", padding: 0, margin: "6px 0 0 0" }}>
-                {cropPresets.map((p) => (
-                  <li key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <div style={{ flex: 1 }}>{p.name}</div>
-                    <div style={{ color: "#666", fontSize: 12 }}>{(p.crop && p.crop.left != null) ? `${p.crop.left.toFixed(2)}% / ${p.crop.top.toFixed(2)}%` : "-"}</div>
-                    <button type="button" className="ghost-button" onClick={() => handleApplyCropPreset(p)}>適用</button>
-                    <button type="button" className="timeline-item-delete" onClick={() => handleDeletePreset(p.id)}>削除</button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </div>
-      </div>
-
+      <CropControls
+        previewBounds={previewBounds}
+        cropForm={cropForm}
+        cropFormUnit={cropFormUnit}
+        setCropFormUnit={setCropFormUnit}
+        handleCropFormChange={handleCropFormChange}
+        applyCropFromForm={applyCropFromForm}
+        isExporting={isExporting}
+        presetName={presetName}
+        setPresetName={setPresetName}
+        handleSaveCropPreset={handleSaveCropPreset}
+        cropPresets={cropPresets}
+        handleApplyCropPreset={handleApplyCropPreset}
+        handleDeletePreset={handleDeletePreset}
+        hasCrop={hasCrop}
+      />
 
       <ButtonContent
         handleCopy={handleCopy}
