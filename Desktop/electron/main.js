@@ -528,7 +528,14 @@ async function exportSingleSegment({
   args.push("-i", sourcePath);
 
   if (cropFilter) {
-    args.push("-vf", cropFilter, "-c:v", "libx264", "-preset", videoPreset, "-crf", videoCrf, "-pix_fmt", "yuv420p", "-threads", "0");
+    // scaling algorithm (lanczos) to preserve sharpness.
+    // to sharpen the image after cropping
+    const targetWidth = Number(sourceInfo.width) || null;
+    const targetHeight = Number(sourceInfo.height) || null;
+    const scaleFilter = (targetWidth && targetHeight) ? `,scale=${targetWidth}:${targetHeight}:flags=lanczos` : "";
+    const vfFilter = `${cropFilter}${scaleFilter}`;
+
+    args.push("-vf", vfFilter, "-c:v", "libx264", "-preset", videoPreset, "-crf", videoCrf, "-pix_fmt", "yuv420p", "-threads", "0");
     if (sourceInfo.hasAudio) {
       args.push("-c:a", "aac", "-b:a", "192k");
     } else {
