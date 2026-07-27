@@ -13,8 +13,10 @@ import {
 } from "./lib/videoTimeline.js";
 import TimelineVisualizer from "./components/TimelineVisualizer.jsx";
 import LoadingIndicator from "./components/LoadingIndicator.jsx";
+import ExportProgressDialog from "./components/ExportProgressDialog.jsx";
 import useShortcuts from "./hooks/useShortcuts";
 import ButtonContent from "./components/button/button-content";
+import { logError } from "./lib/logger.js";
 import {
   finalizeCropSelection,
   getDraftCropBoxStyle,
@@ -69,6 +71,7 @@ export default function VideoEditorApp() {
   const [cutMarkers, setCutMarkers] = useState([]); // array of { start, end }
   const [outputPath, setOutputPath] = useState("");
   const [isExportConfirmOpen, setIsExportConfirmOpen] = useState(false);
+  const [preserveCropResolution, setPreserveCropResolution] = useState(true);
   const [status, setStatus] = useState("動画を選択してください。");
   const [errorText, setErrorText] = useState("");
 
@@ -740,7 +743,7 @@ export default function VideoEditorApp() {
       if (ctx && v) {
         // reconnect source if needed
         if (audioSourceRef.current) {
-          try { audioSourceRef.current.disconnect(); } catch (e) {}
+          try { audioSourceRef.current.disconnect(); } catch (e) { logError("VideoEditorApp.audioSourceRef.disconnect", e); }
           audioSourceRef.current = null;
         }
         const src = ctx.createMediaElementSource(v);
@@ -755,7 +758,7 @@ export default function VideoEditorApp() {
         const comp = audioCompressorRef.current;
 
         // connect chain: source -> (compressor?) -> gain -> destination
-        try { src.disconnect(); } catch (e) {}
+        try { src.disconnect(); } catch (e) { logError("VideoEditorApp.src.disconnect", e); }
         if (audioNormalize) {
           src.connect(comp);
           comp.connect(gainNode);
@@ -765,8 +768,8 @@ export default function VideoEditorApp() {
         gainNode.connect(ctx.destination);
       }
       } catch (e) {
-      // ignore WebAudio init failures
-      console.warn('WebAudio init failed', e);
+      // ignore WebAudio init failures, but log for diagnostics
+      try { logError('VideoEditorApp.WebAudio.init', e); } catch (err) { console.warn('WebAudio init failed', e); }
     }
     }, [previewPlaybackRate, sourceUrl, audioNormalize]);
 
@@ -779,20 +782,20 @@ export default function VideoEditorApp() {
     try {
       gainNode.gain.cancelScheduledValues(ctx.currentTime);
       gainNode.gain.setValueAtTime(linear, ctx.currentTime);
-    } catch (e) {}
+    } catch (e) { logError('VideoEditorApp.gain.setValue', e); }
     // enable/disable compressor connection
     const src = audioSourceRef.current;
     const comp = audioCompressorRef.current;
     if (src && comp && gainNode) {
       try {
         src.disconnect();
-      } catch (e) {}
+      } catch (e) { logError('VideoEditorApp.src.disconnect', e); }
       if (audioNormalize) {
         src.connect(comp);
         comp.disconnect();
         comp.connect(gainNode);
       } else {
-        try { comp.disconnect(); } catch (e) {}
+        try { comp.disconnect(); } catch (e) { logError('VideoEditorApp.comp.disconnect', e); }
         src.connect(gainNode);
       }
     }
@@ -808,7 +811,7 @@ export default function VideoEditorApp() {
     try {
       gainNode.gain.cancelScheduledValues(ctx.currentTime);
       gainNode.gain.setValueAtTime(linear, ctx.currentTime);
-    } catch (e) {}
+    } catch (e) { logError('VideoEditorApp.gain.setValue', e); }
   }, [audioGainPercent, audioNormalize]);
 
   function handleTogglePreviewSpeed() {
@@ -1303,6 +1306,7 @@ export default function VideoEditorApp() {
         outputPath: chosenOutput,
         segments: safeSegments,
         crop: normalizeCropInput(crop),
+        preserveCropResolution,
         audioGainPercent: Number(audioGainPercent || 100),
         audioNormalize: Boolean(audioNormalize)
       });
@@ -1336,12 +1340,19 @@ export default function VideoEditorApp() {
   return (
     <>
       <LoadingIndicator
-        isVisible={isLoading || isExporting}
-        message={isExporting ? exportMessage || "動画を出力中..." : loadingMessage}
-        progress={isExporting ? exportProgress : loadingProgress}
-        indeterminate={isExporting ? exportIndeterminate : loadingIndeterminate}
-        segments={isExporting ? exportSegments : null}
-        startTime={isExporting ? exportStartTimeRef.current : loadStartTimeRef.current}
+        isVisible={isLoading}
+        message={loadingMessage}
+        progress={loadingProgress}
+        indeterminate={loadingIndeterminate}
+        startTime={loadStartTimeRef.current}
+      />
+      <ExportProgressDialog
+        isVisible={isExporting}
+        message={exportMessage || "動画を出力中..."}
+        progress={exportProgress}
+        indeterminate={exportIndeterminate}
+        segments={exportSegments}
+        startTime={exportStartTimeRef.current}
       />
     <main className="editor-shell">
       <section className="hero card">
@@ -1675,6 +1686,16 @@ export default function VideoEditorApp() {
 
               <div className="export-meta">
                 <span>出力先: {outputPath || "未設定"}</span>
+                {hasCrop ? (
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={preserveCropResolution}
+                      onChange={(event) => setPreserveCropResolution(event.target.checked)}
+                    />
+                    crop後も元解像度を維持する
+                  </label>
+                ) : null}
               </div>
             </div>
 

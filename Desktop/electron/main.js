@@ -50,6 +50,7 @@ function getUnpackedBinaryPath(binaryPath) {
 
 const ffmpegBinary = resolveBinaryPath(ffmpegStatic);
 const ffprobeBinary = resolveBinaryPath(ffprobeStatic);
+let preferredH264EncoderPromise = null;
 
 function runCommand(binary, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -152,6 +153,35 @@ function runCommand(binary, args, options = {}) {
 
     startProcess(resolveBinaryPath(binary), true);
   });
+}
+
+function getPreferredH264Encoder() {
+  if (!preferredH264EncoderPromise) {
+    preferredH264EncoderPromise = runCommand(ffmpegBinary, ["-hide_banner", "-encoders"])
+      .then(({ stdout, stderr }) => {
+        const encoders = `${stdout}\n${stderr}`;
+        const hardwareEncoders = [
+          ["h264_nvenc", "NVIDIA NVENC"],
+          ["h264_qsv", "Intel Quick Sync Video"],
+          ["h264_amf", "AMD AMF"]
+        ];
+
+        for (const [encoder, label] of hardwareEncoders) {
+          if (new RegExp(`\\b${encoder}\\b`).test(encoders)) {
+            console.info(`Using ${label} for video export when the GPU is available.`);
+            return encoder;
+          }
+        }
+
+        return "libx264";
+      })
+      .catch((error) => {
+        console.warn("Unable to detect a hardware H.264 encoder; using CPU encoding.", error);
+        return "libx264";
+      });
+  }
+
+  return preferredH264EncoderPromise;
 }
 
 function parseFfmpegProgressTime(progressState) {
@@ -448,6 +478,9 @@ async function exportSingleSegment({
   segment,
   sourceInfo,
   cropFilter,
+  preserveCropResolution = true,
+  videoThreads = 0,
+  videoEncoder = "libx264",
   audioOptions = {},
   startProgress,
   endProgress,
@@ -538,23 +571,52 @@ async function exportSingleSegment({
   args.push("-i", sourcePath);
 
   if (cropFilter) {
-    // scaling algorithm (lanczos) to preserve sharpness.
-    // to sharpen the image after cropping
+    // Scale back only when the user chooses to retain the source dimensions.
     const targetWidth = Number(sourceInfo.width) || null;
     const targetHeight = Number(sourceInfo.height) || null;
-    const scaleFilter = (targetWidth && targetHeight) ? `,scale=${targetWidth}:${targetHeight}:flags=lanczos` : "";
+    const scaleFilter = preserveCropResolution && targetWidth && targetHeight
+      ? `,scale=${targetWidth}:${targetHeight}:flags=lanczos`
+      : "";
     const vfFilter = `${cropFilter}${scaleFilter}`;
+    let videoEncodingArgs;
+    if (videoEncoder === "h264_nvenc") {
+      videoEncodingArgs = [
+        "-c:v", "h264_nvenc",
+        "-preset", "p4",
+        "-tune", "hq",
+        "-rc", "vbr",
+        "-cq", "19",
+        "-b:v", "0"
+      ];
+    } else if (videoEncoder === "h264_qsv") {
+      videoEncodingArgs = [
+        "-c:v", "h264_qsv",
+        "-preset", "medium",
+        "-global_quality", "19"
+      ];
+    } else if (videoEncoder === "h264_amf") {
+      videoEncodingArgs = [
+        "-c:v", "h264_amf",
+        "-quality", "quality",
+        "-rc", "cqp",
+        "-qp_i", "19",
+        "-qp_p", "19"
+      ];
+    } else {
+      videoEncodingArgs = [
+        "-c:v", "libx264",
+        "-preset", videoPreset,
+        "-crf", videoCrf,
+        "-x264-params", "aq-mode=3:aq-strength=1.0",
+        "-threads", String(videoThreads)
+      ];
+    }
 
     args.push(
       "-vf", vfFilter,
-      "-c:v", "libx264",
-      "-preset", videoPreset,
-      "-crf", videoCrf,
+      ...videoEncodingArgs,
       "-profile:v", "high",
-      "-level", "4.0",
-      "-x264-params", "aq-mode=3:aq-strength=1.0",
-      "-pix_fmt", "yuv420p",
-      "-threads", "0"
+      "-pix_fmt", "yuv420p"
     );
     if (sourceInfo.hasAudio) {
       // build audio filter chain if adjustments requested
@@ -588,37 +650,70 @@ async function exportSingleSegment({
   }
 
   args.push("-movflags", "+faststart", outputPath);
-  await runFfmpegWithProgress(args, {
-    totalDuration: segment.duration,
-    startProgress,
-    endProgress,
-    progressMessage,
-    onProgress: ({ progress, processedSeconds, totalDuration }) => {
-      const segmentProgress = totalDuration > 0 ? (processedSeconds / totalDuration) * 100 : 0;
-      if (Array.isArray(segmentsProgressArray) && typeof segmentIndex === "number") {
-        segmentsProgressArray[segmentIndex - 1] = Number(segmentProgress.toFixed(1));
-        const textLines = [progressMessage, ...segmentsProgressArray.map((p, i) => `タイムライン${i + 1}: ${p}%`)];
-        sendExportProgress({
-          progress,
-          message: textLines.join("\n"),
-          segments: [...segmentsProgressArray],
-          currentSegment,
-          totalSegments,
-          indeterminate: false
-        });
-      } else {
-        const d = buildTimelineProgressDetails(progressMessage, totalSegments, currentSegment, segmentProgress);
-        sendExportProgress({
-          progress,
-          message: d.text,
-          segments: d.segments,
-          currentSegment,
-          totalSegments,
-          indeterminate: false
-        });
+  try {
+    await runFfmpegWithProgress(args, {
+      totalDuration: segment.duration,
+      startProgress,
+      endProgress,
+      progressMessage,
+      onProgress: ({ progress, processedSeconds, totalDuration }) => {
+        const segmentProgress = totalDuration > 0 ? (processedSeconds / totalDuration) * 100 : 0;
+        if (Array.isArray(segmentsProgressArray) && typeof segmentIndex === "number") {
+          segmentsProgressArray[segmentIndex - 1] = Number(segmentProgress.toFixed(1));
+          const textLines = [progressMessage, ...segmentsProgressArray.map((p, i) => `タイムライン${i + 1}: ${p}%`)];
+          sendExportProgress({
+            progress,
+            message: textLines.join("\n"),
+            segments: [...segmentsProgressArray],
+            currentSegment,
+            totalSegments,
+            indeterminate: false
+          });
+        } else {
+          const d = buildTimelineProgressDetails(progressMessage, totalSegments, currentSegment, segmentProgress);
+          sendExportProgress({
+            progress,
+            message: d.text,
+            segments: d.segments,
+            currentSegment,
+            totalSegments,
+            indeterminate: false
+          });
+        }
       }
+    });
+  } catch (error) {
+    if (videoEncoder === "libx264") {
+      throw error;
     }
-  });
+
+    console.warn(`${videoEncoder} export failed; retrying the segment with CPU encoding.`, error);
+    sendExportProgress({
+      progress: startProgress,
+      message: `${progressMessage}\nGPU エンコードを利用できないため CPU エンコードに切り替えます...`,
+      currentSegment,
+      totalSegments,
+      indeterminate: true
+    });
+    await exportSingleSegment({
+      sourcePath,
+      outputPath,
+      segment,
+      sourceInfo,
+      cropFilter,
+      preserveCropResolution,
+      videoThreads,
+      videoEncoder: "libx264",
+      audioOptions,
+      startProgress,
+      endProgress,
+      progressMessage,
+      currentSegment,
+      totalSegments,
+      segmentsProgressArray,
+      segmentIndex
+    });
+  }
 }
 
 function sendExportProgress(progressUpdate) {
@@ -707,6 +802,7 @@ async function exportVideo(payload = {}) {
   const outputPath = String(payload.outputPath || "");
   const segments = Array.isArray(payload.segments) ? payload.segments : [];
   const crop = payload.crop || null;
+  const preserveCropResolution = payload.preserveCropResolution !== false;
   const separateFiles = Boolean(payload.separateFiles);
 
   if (!sourcePath || !outputPath || !segments.length) {
@@ -726,6 +822,7 @@ async function exportVideo(payload = {}) {
 
   const sourceInfo = await probeVideo(sourcePath);
   const cropFilter = buildCropFilter(crop, sourceInfo.width || 1, sourceInfo.height || 1);
+  const videoEncoder = cropFilter ? await getPreferredH264Encoder() : "libx264";
   const videoPreset = cropFilter ? "ultrafast" : "veryfast";
   const videoCrf = cropFilter ? "20" : "18";
   // audio adjustment options from payload (percent-based volume)
@@ -774,9 +871,12 @@ async function exportVideo(payload = {}) {
     acc += seg.duration;
   }
 
-  // Concurrency: use half of CPU cores (but at least 1), cap to 4 to avoid overwhelming disk
+  // Keep outputs independent while limiting each encoder so two crop jobs can share the CPU.
   const cpuCount = Math.max(1, (os.cpus() || []).length || 1);
-  const concurrency = Math.min(4, Math.max(1, Math.floor(cpuCount / 2)));
+  const concurrency = cropFilter
+    ? (cpuCount >= 4 ? 2 : 1)
+    : Math.min(4, Math.max(1, Math.floor(cpuCount / 2)));
+  const videoThreads = cropFilter ? Math.max(1, Math.floor(cpuCount / concurrency)) : 0;
 
   let nextIndex = 0;
   let completedDuration = 0;
@@ -800,6 +900,9 @@ async function exportVideo(payload = {}) {
           segment,
           sourceInfo,
           cropFilter,
+          preserveCropResolution,
+          videoThreads,
+          videoEncoder,
           audioOptions,
           startProgress,
           endProgress,

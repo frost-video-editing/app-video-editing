@@ -54,6 +54,7 @@
   "build": {
     "appId": "com.frost.videoeditor",
     "productName": "VideoEditing",
+    "icon": "build/icons/icon",
     "files": [
       "Desktop/electron/**/*",
       "dist/**/*",

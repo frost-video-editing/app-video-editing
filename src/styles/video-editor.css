@@ -572,6 +572,99 @@ input[type="range"] {
   justify-content: flex-end;
 }
 
+.export-progress-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(3, 8, 14, 0.88);
+  backdrop-filter: blur(12px);
+}
+
+.export-progress-dialog {
+  width: min(620px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 28px;
+  display: grid;
+  gap: 22px;
+  background: var(--card-strong);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  box-shadow: 0 28px 64px rgba(0, 0, 0, 0.5);
+}
+
+.export-progress-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.export-progress-header .loading-spinner {
+  flex: 0 0 auto;
+}
+
+.export-progress-header h2 {
+  margin: 4px 0 0;
+  font-size: 22px;
+}
+
+.export-progress-message {
+  margin: 0;
+  min-height: 3.2em;
+  color: var(--text);
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.export-progress-summary {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto;
+  gap: 8px 16px;
+  align-items: baseline;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.export-progress-summary span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.export-progress-summary strong {
+  color: var(--accent);
+  font-family: "Space Grotesk", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.export-progress-segments {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.export-progress-segment {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.export-progress-segment span {
+  color: var(--muted);
+}
+
+.export-progress-segment strong {
+  font-family: "Space Grotesk", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 1080px) {
   .editor-grid {
     grid-template-columns: 1fr;
@@ -597,6 +690,10 @@ input[type="range"] {
 
   .crop-grid {
     grid-template-columns: 1fr;
+  }
+
+  .export-progress-summary {
+    grid-template-columns: 1fr auto;
   }
 
   .status-strip > div,
