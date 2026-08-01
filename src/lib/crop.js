@@ -31,6 +31,56 @@ export function normalizeCropInput(nextCrop) {
   };
 }
 
+// Formats the non-zero crop edges for the export confirmation dialog.
+export function formatCrop(crop) {
+  const parts = [];
+  if (crop.left > 0) parts.push(`左 ${crop.left}%`);
+  if (crop.top > 0) parts.push(`上 ${crop.top}%`);
+  if (crop.right > 0) parts.push(`右 ${crop.right}%`);
+  if (crop.bottom > 0) parts.push(`下 ${crop.bottom}%`);
+  return parts.length ? parts.join(" / ") : "全体をそのまま出力";
+}
+
+// Creates the overlay rectangle style for a confirmed percentage-based crop.
+export function getCropBoxStyle(crop) {
+  return {
+    left: `${crop.left}%`,
+    top: `${crop.top}%`,
+    width: `${Math.max(0, 100 - crop.left - crop.right)}%`,
+    height: `${Math.max(0, 100 - crop.top - crop.bottom)}%`
+  };
+}
+
+// Creates the transformed video style used to preview only the kept crop region.
+export function getCroppedPreviewVideoStyle(crop) {
+  const keptWidth = Math.max(1, 100 - crop.left - crop.right);
+  const keptHeight = Math.max(1, 100 - crop.top - crop.bottom);
+  const scale = 100 / Math.max(keptWidth, keptHeight);
+  const offsetX = crop.left + keptWidth / 2 - 50;
+  const offsetY = crop.top + keptHeight / 2 - 50;
+
+  return {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    transformOrigin: "center center",
+    transform: `translate(calc(-50% - ${offsetX}%), calc(-50% - ${offsetY}%)) scale(${scale})`
+  };
+}
+
+// Converts preview bounds into an absolute viewport style.
+export function getPreviewViewportStyle(previewBounds) {
+  return {
+    left: `${previewBounds.left}px`,
+    top: `${previewBounds.top}px`,
+    width: `${previewBounds.width}px`,
+    height: `${previewBounds.height}px`
+  };
+}
+
 // Convert a client pointer position into preview-relative coordinates.
 export function getPreviewPoint(clientX, clientY, stageRect, previewBounds) {
   if (!stageRect || !previewBounds) {

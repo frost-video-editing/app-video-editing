@@ -1,0 +1,224 @@
+/* Operation Log Viewer Styles */
+
+.log-viewer-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.log-viewer-section {
+  margin: 16px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.log-empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  color: #666;
+}
+
+.log-empty-state .eyebrow {
+  font-size: 48px;
+  margin: 0 0 12px 0;
+}
+
+.log-empty-state h2 {
+  font-size: 18px;
+  margin: 12px 0 8px 0;
+  color: #333;
+}
+
+.log-empty-state p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Table Wrapper */
+.log-table-wrapper {
+  overflow-x: auto;
+}
+
+/* Main Table */
+.log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.log-table thead {
+  background-color: #f5f5f5;
+  border-bottom: 2px solid #ddd;
+}
+
+.log-table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+}
+
+.log-table .col-number {
+  width: 50px;
+  text-align: center;
+}
+
+.log-table .col-operation {
+  width: 150px;
+}
+
+.log-table .col-timestamp {
+  width: 200px;
+}
+
+.log-table .col-details {
+  width: 50px;
+  text-align: center;
+}
+
+/* Sort Button */
+.sort-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #333;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 0;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.sort-button:hover {
+  color: #0066cc;
+}
+
+/* Table Rows */
+.log-table-row {
+  border-bottom: 1px solid #eee;
+  transition: background-color 0.2s ease;
+}
+
+.log-table-row:hover {
+  background-color: #f9f9f9;
+}
+
+.log-table-row--expanded {
+  background-color: #f0f5ff;
+}
+
+.log-table td {
+  padding: 12px;
+  vertical-align: middle;
+}
+
+.log-table .col-number {
+  text-align: center;
+  font-weight: 600;
+  color: #999;
+}
+
+.col-operation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.operation-icon {
+  font-size: 16px;
+  width: 24px;
+  text-align: center;
+}
+
+.operation-label {
+  font-weight: 500;
+  color: #333;
+}
+
+.col-timestamp {
+  color: #666;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.expand-indicator {
+  display: inline-block;
+  width: 20px;
+  text-align: center;
+  color: #999;
+  font-size: 12px;
+}
+
+/* Details Row */
+.log-details-row td {
+  padding: 0;
+  background-color: #fafbff;
+}
+
+.log-details-content {
+  padding: 12px;
+  background-color: #fafbff;
+}
+
+.details-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #fff;
+  border: 1px solid #e0e8ff;
+  border-radius: 4px;
+}
+
+.details-table tr:not(:last-child) {
+  border-bottom: 1px solid #e8ecff;
+}
+
+.details-table td {
+  padding: 8px 12px;
+}
+
+.detail-key {
+  font-weight: 600;
+  color: #666;
+  white-space: nowrap;
+  width: 150px;
+  vertical-align: top;
+}
+
+.detail-value {
+  color: #333;
+  font-family: "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .log-table {
+    font-size: 13px;
+  }
+
+  .log-table th,
+  .log-table td {
+    padding: 10px 8px;
+  }
+
+  .log-table .col-timestamp {
+    width: 140px;
+    font-size: 12px;
+  }
+
+  .col-operation {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .operation-icon {
+    display: none;
+  }
+
+  .log-table-wrapper {
+    overflow-x: auto;
+  }
+}
+

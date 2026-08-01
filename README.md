@@ -1,25 +1,44 @@
-# VideoEditing – ローカル動画編集アプリ
+# VideoEditing – Local Video Editor
 
-Electron + React + FFmpeg 製のローカル動画編集アプリです。動画ファイルは手元で処理され、クラウドやアカウントは不要です。
+A desktop video editor for crop, trim, and timeline editing. Built with Electron + React + FFmpeg. All processing happens locally—no cloud uploads, no data transmission. Open source for transparency.
 
-## 機能
+## Why this application?
 
-- **crop** — 左右上下の余白をスライダーで調整して映像を切り抜き
-- **切り取り** — 範囲を抜き出してタイムラインを編集
-- **貼り付け** — コピー/切り取りした範囲を任意位置へ挿入
-- **部分削除** — 選択範囲をタイムラインから除去
-- **動画出力** — FFmpeg で crop と編集結果を mp4 に書き出し
+Commercial video editors often upload files to the cloud, requiring long waits and raising privacy concerns about hidden data transfers. This app runs entirely on your machine using a locally bundled FFmpeg, keeping your video files and workflows private and fast.
 
-## 開発環境のセットアップ
+## Features
+
+- **Crop** — Drag a crop area on the preview or enter numeric coordinates.
+- **Timeline editing** — Cut, delete, copy, and paste video segments to arrange them.
+- **Separate-file export** — Each timeline item is saved as its own MP4.
+- **Audio control** — Adjust volume (0–200%) and enable simple normalization.
+- **Crop-resolution choice** — Export at original resolution or at the crop's actual resolution.
+- **Hardware encoding** — Auto-detects NVIDIA, Intel, or AMD H.264 encoders. Falls back to CPU if unavailable.
+- **Progress window** — Shows real-time export status with per-segment progress.
+
+## Export
+
+Crop operations require re-encoding. For CPU encoding, the app uses H.264 with `libx264 -fast -crf 18`. When a GPU encoder is available, it uses a faster, quality-balanced setting. On systems with 4+ cores, up to two timeline items are processed concurrently, with threads divided to avoid CPU contention.
+
+Disabling **Keep original resolution after crop** exports at the crop's actual resolution—faster, smaller files, and sharper results when upscaling is not needed.
+
+## Development Setup
 
 ```bash
 npm install
 npm run dev
 ```
 
-## 使い方
+## Workflow
 
-1. `動画を選択` で素材を読み込みます。
-2. `切り取り開始` と `切り取り終了` で範囲を決めます。
-3. `コピー` / `切り取り` / `部分削除` / `貼り付け` でタイムラインを編集します。
-4. `出力先を選ぶ` の後に `動画出力` を実行します。
+1. Select a source video.
+2. Set crop, preview, and cut the timeline.
+3. Use copy/delete/paste to arrange segments.
+4. Export to MP4 (one file per timeline item).
+
+## License
+
+Free for personal and commercial use.
+However, you need to contact the author and developer for commercial use.
+
+Please see the [LICENSE](LICENSE) file for more details.

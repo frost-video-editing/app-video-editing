@@ -7,16 +7,50 @@ import {
   removeRange,
   segmentDuration,
   timelineToSourceTime,
-  sourceToTimelineTime,
   timelineDuration,
-  normalizeRange
+  normalizeRange,
+  formatVideoTime,
+  splitSegmentsAtPreviewTime,
+  splitSegmentsAtTimelinePositions
 } from "./lib/videoTimeline.js";
 import TimelineVisualizer from "./components/TimelineVisualizer.jsx";
 import LoadingIndicator from "./components/LoadingIndicator.jsx";
 import ExportProgressDialog from "./components/ExportProgressDialog.jsx";
+import ExportConfirmDialog from "./components/ExportConfirmDialog.jsx";
+import OperationLogViewer from "./components/OperationLogViewer.jsx";
+import ShortcutSettingsModal from "./components/ShortcutSettingsModal.jsx";
 import useShortcuts from "./hooks/useShortcuts";
+import usePreviewPlayback from "./hooks/usePreviewPlayback.jsx";
+import useEditorHistory from "./hooks/useEditorHistory.jsx";
+import useEditorMessages from "./hooks/useEditorMessages.jsx";
 import ButtonContent from "./components/button/button-content";
-import { logError } from "./lib/logger.js";
+import { editorMessages } from "./lib/editorMessages.js";
+import {
+  createCopyLog,
+  createCutLog,
+  createPasteLog,
+  createDeleteLog,
+  createUndoLog,
+  createCropLog,
+  createExportLog,
+  createLoadLog
+} from "./lib/operationLog.js";
+import {
+  formatCrop,
+  getCropBoxStyle,
+  getCroppedPreviewVideoStyle,
+  getPreviewViewportStyle
+} from "./lib/crop.js";
+import {
+  createHandleCopySelection,
+  createHandleDeleteSelection,
+  createHandleDeleteSegment,
+  createHandleCut,
+  createHandlePaste,
+  createHandleInsertClip,
+  createHandleResetTimeline,
+  createHandleSplitAtPreviewTime,
+} from "./lib/timelineOperations.js";
 import {
   finalizeCropSelection,
   getDraftCropBoxStyle,
@@ -28,23 +62,6 @@ import {
 } from "./components/button/crop.jsx";
 
 const emptyCrop = { left: 0, top: 0, right: 0, bottom: 0 };
-
-function formatCrop(crop) {
-  const parts = [];
-  if (crop.left > 0) parts.push(`左 ${crop.left}%`);
-  if (crop.top > 0) parts.push(`上 ${crop.top}%`);
-  if (crop.right > 0) parts.push(`右 ${crop.right}%`);
-  if (crop.bottom > 0) parts.push(`下 ${crop.bottom}%`);
-  return parts.length ? parts.join(" / ") : "全体をそのまま出力";
-}
-
-function formatVideoTime(totalSeconds) {
-  const total = Math.max(0, Number(totalSeconds) || 0);
-  const minutes = Math.floor(total / 60);
-  const seconds = Math.floor(total % 60);
-  const fraction = Math.round((total - Math.floor(total)) * 1000);
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(fraction).padStart(3, "0")}`;
-}
 
 export default function VideoEditorApp() {
 
@@ -72,8 +89,6 @@ export default function VideoEditorApp() {
   const [outputPath, setOutputPath] = useState("");
   const [isExportConfirmOpen, setIsExportConfirmOpen] = useState(false);
   const [preserveCropResolution, setPreserveCropResolution] = useState(true);
-  const [status, setStatus] = useState("動画を選択してください。");
-  const [errorText, setErrorText] = useState("");
 
   const [isExporting, setIsExporting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -90,25 +105,18 @@ export default function VideoEditorApp() {
   const [isCropSelecting, setIsCropSelecting] = useState(false);
   const [cropDraft, setCropDraft] = useState(null);
   const [cropInteraction, setCropInteraction] = useState(null); // { mode, originDraft, pointerStart }
-  const [previewLoadProgress, setPreviewLoadProgress] = useState(0);
-  const [previewLoadedUntil, setPreviewLoadedUntil] = useState(0);
-  const [previewLoadMessage, setPreviewLoadMessage] = useState("未読み込み");
-  const [isPreviewReady, setIsPreviewReady] = useState(false);
-  const [previewCurrentTime, setPreviewCurrentTime] = useState(0);
-  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
-  const [previewPlaybackRate, setPreviewPlaybackRate] = useState(1);
   const [isCropPreviewLocked, setIsCropPreviewLocked] = useState(false);
-  const [audioGainPercent, setAudioGainPercent] = useState(100);
-  const [audioNormalize, setAudioNormalize] = useState(false);
-  const audioContextRef = useRef(null);
-  const audioSourceRef = useRef(null);
-  const audioGainNodeRef = useRef(null);
-  const audioCompressorRef = useRef(null);
-  const [undoStack, setUndoStack] = useState([]);
   const [cropForm, setCropForm] = useState({ left: 0, top: 0, width: 100, height: 100 });
   const [cropFormUnit, setCropFormUnit] = useState("%"); // "%" or "px"
   const [cropPresets, setCropPresets] = useState([]);
   const [presetName, setPresetName] = useState("");
+
+  // Operation log state
+  const [operationLogs, setOperationLogs] = useState([]);
+  const [isShowingLogViewer, setIsShowingLogViewer] = useState(false);
+
+  // Shortcut settings state
+  const [isShortcutSettingsOpen, setIsShortcutSettingsOpen] = useState(false);
 
   const totalDuration = useMemo(() => timelineDuration(segments), [segments]);
   const selectedRange = useMemo(
@@ -119,18 +127,85 @@ export default function VideoEditorApp() {
   const selectedDuration = Math.max(0, selectedRange.end - selectedRange.start);
   const clipboardDuration = useMemo(() => timelineDuration(clipboard), [clipboard]);
 
+  const {
+    isPreviewReady,
+    previewCurrentTime,
+    setPreviewCurrentTime,
+    isPreviewPlaying,
+    previewPlaybackRate,
+    audioGainPercent,
+    setAudioGainPercent,
+    audioNormalize,
+    setAudioNormalize,
+    handlePreviewVideoLoadStart,
+    handlePreviewVideoProgress,
+    handlePreviewVideoReady,
+    handlePreviewVideoWaiting,
+    handlePreviewVideoError,
+    handlePreviewTimeUpdate,
+    handleTogglePreviewPlayback,
+    handleTogglePreviewSpeed,
+    handlePreviewPlay,
+    handlePreviewPause
+  } = usePreviewPlayback({
+    videoRef: previewVideoRef,
+    sourceUrl,
+    duration: metadata.duration,
+    segments,
+    onPlayheadChange: setPlayhead,
+    setErrorText,
+    setStatus
+  });
+
+  const messages = useEditorMessages(editorMessages.initialStatus);
+
+  const { undoStack, pushUndoSnapshot, clearUndoHistory, handleUndo } = useEditorHistory({
+    editorState: {
+      segments,
+      selectionStart,
+      selectionEnd,
+      playhead,
+      clipboard,
+      clipBank,
+      cutMarkers,
+      crop,
+      audioGainPercent,
+      audioNormalize,
+      isCropPreviewLocked,
+      outputPath,
+      previewCurrentTime
+    },
+    onRestore: (snapshot) => {
+      setSegments(snapshot.segments);
+      setSelectionStart(snapshot.selectionStart);
+      setSelectionEnd(snapshot.selectionEnd);
+      setPlayheadWithPreview(snapshot.playhead);
+      setClipboard(snapshot.clipboard);
+      setClipBank(snapshot.clipBank);
+      setCutMarkers(snapshot.cutMarkers);
+      setCrop(snapshot.crop);
+      setAudioGainPercent(snapshot.audioGainPercent);
+      setAudioNormalize(snapshot.audioNormalize);
+      setIsCropPreviewLocked(snapshot.isCropPreviewLocked);
+      setOutputPath(snapshot.outputPath);
+      setPreviewCurrentTime(snapshot.previewCurrentTime);
+      resetCropSelection();
+      messages.clearErrorOnly();
+    },
+    onEmpty: () => messages.setErrorMessage(editorMessages.noUndo),
+    onUndo: () => {
+      messages.setStatusMessage(editorMessages.undoComplete);
+      addOperationLog("undo");
+    }
+  });
+
   const hasCrop = crop.left > 0 || crop.top > 0 || crop.right > 0 || crop.bottom > 0;
   const currentCropBoxStyle = useMemo(() => {
     if (!previewBounds) {
       return null;
     }
 
-    return {
-      left: `${crop.left}%`,
-      top: `${crop.top}%`,
-      width: `${Math.max(0, 100 - crop.left - crop.right)}%`,
-      height: `${Math.max(0, 100 - crop.top - crop.bottom)}%`
-    };
+    return getCropBoxStyle(crop);
   }, [crop, previewBounds]);
 
   const previewVideoStyle = useMemo(() => {
@@ -138,29 +213,7 @@ export default function VideoEditorApp() {
       return undefined;
     }
 
-    const keptWidth = Math.max(1, 100 - crop.left - crop.right);
-    const keptHeight = Math.max(1, 100 - crop.top - crop.bottom);
-
-    // Use uniform scaling to avoid non-uniform stretching.
-    const scale = 100 / Math.max(keptWidth, keptHeight);
-
-    // Center the cropped region: compute the crop center and offset
-    // so the crop's center aligns with the viewport center after scaling.
-    const centerX = crop.left + keptWidth / 2;
-    const centerY = crop.top + keptHeight / 2;
-    const offsetX = centerX - 50; // percent offset relative to center
-    const offsetY = centerY - 50;
-
-    return {
-      position: "absolute",
-      left: "50%",
-      top: "50%",
-      width: "100%",
-      height: "100%",
-      objectFit: "cover",
-      transformOrigin: "center center",
-      transform: `translate(calc(-50% - ${offsetX}%), calc(-50% - ${offsetY}%)) scale(${scale})`
-    };
+    return getCroppedPreviewVideoStyle(crop);
   }, [crop, hasCrop, isCropPreviewLocked]);
 
   const previewViewportStyle = useMemo(() => {
@@ -168,52 +221,8 @@ export default function VideoEditorApp() {
       return undefined;
     }
 
-    return {
-      left: `${previewBounds.left}px`,
-      top: `${previewBounds.top}px`,
-      width: `${previewBounds.width}px`,
-      height: `${previewBounds.height}px`
-    };
+    return getPreviewViewportStyle(previewBounds);
   }, [hasCrop, isCropPreviewLocked, previewBounds]);
-
-  // Helper to format crop values for display (pixels + percent)
-  function formatCropDisplayFromPercent(cropPercent) {
-    if (!previewBounds || !cropPercent) return null;
-    const leftPx = (Number(cropPercent.left) || 0) / 100 * previewBounds.width;
-    const topPx = (Number(cropPercent.top) || 0) / 100 * previewBounds.height;
-    const rightPx = (Number(cropPercent.right) || 0) / 100 * previewBounds.width;
-    const bottomPx = (Number(cropPercent.bottom) || 0) / 100 * previewBounds.height;
-    const widthPx = Math.max(0, previewBounds.width - leftPx - rightPx);
-    const heightPx = Math.max(0, previewBounds.height - topPx - bottomPx);
-    return {
-      leftPx: Math.round(leftPx),
-      topPx: Math.round(topPx),
-      widthPx: Math.round(widthPx),
-      heightPx: Math.round(heightPx),
-      leftPct: Number(cropPercent.left) || 0,
-      topPct: Number(cropPercent.top) || 0,
-      rightPct: Number(cropPercent.right) || 0,
-      bottomPct: Number(cropPercent.bottom) || 0
-    };
-  }
-
-  function formatDraftDisplay(draft) {
-    if (!draft || !previewBounds) return null;
-    const left = Math.min(draft.startX, draft.endX);
-    const top = Math.min(draft.startY, draft.endY);
-    const width = Math.abs(draft.endX - draft.startX);
-    const height = Math.abs(draft.endY - draft.startY);
-    return {
-      leftPx: Math.round(left),
-      topPx: Math.round(top),
-      widthPx: Math.round(width),
-      heightPx: Math.round(height),
-      leftPct: (left / previewBounds.width) * 100,
-      topPct: (top / previewBounds.height) * 100,
-      widthPct: (width / previewBounds.width) * 100,
-      heightPct: (height / previewBounds.height) * 100
-    };
-  }
 
   // Sync cropForm when confirmed crop changes. Respect current unit.
   useEffect(() => {
@@ -259,15 +268,15 @@ export default function VideoEditorApp() {
 
   function handleSaveCropPreset() {
     if (!hasCrop) {
-      setErrorText("先に crop を指定してください。");
+      messages.setErrorMessage(editorMessages.cropRequired);
       return;
     }
     const name = (presetName || `preset-${new Date().toISOString()}`).trim();
     const preset = { id: Date.now(), name, crop: normalizeCropInput(crop) };
     setCropPresets((cur) => [preset, ...cur].slice(0, 50));
     setPresetName("");
-    setStatus(`crop を保存しました: ${name}`);
-    setErrorText("");
+    messages.setStatusMessage(editorMessages.cropSaved(name));
+    messages.clearErrorOnly();
   }
 
   function handleApplyCropPreset(preset) {
@@ -275,12 +284,12 @@ export default function VideoEditorApp() {
     pushUndoSnapshot();
     setCrop({ ...preset.crop });
     setIsCropPreviewLocked(true);
-    setStatus(`保存済み preset を適用しました: ${preset.name}`);
+    messages.setStatusMessage(editorMessages.cropPresetApplied(preset.name));
   }
 
   function handleDeletePreset(id) {
     setCropPresets((cur) => cur.filter((p) => p.id !== id));
-    setStatus("preset を削除しました。");
+    messages.setStatusMessage(editorMessages.cropPresetDeleted);
   }
 
   function handleCropFormChange(field, value) {
@@ -291,7 +300,7 @@ export default function VideoEditorApp() {
 
   function applyCropFromForm() {
     if (!previewBounds) {
-      setErrorText("プレビュー領域が準備できていません。");
+      messages.setErrorMessage(editorMessages.previewNotReady);
       return;
     }
     let leftPct, topPct, widthPct, heightPct;
@@ -318,7 +327,7 @@ export default function VideoEditorApp() {
     pushUndoSnapshot();
     setCrop(next);
     setIsCropPreviewLocked(true);
-    setStatus("数値で指定した crop を適用しました。");
+    messages.setStatusMessage(editorMessages.cropApplied);
   }
 
 
@@ -340,12 +349,6 @@ export default function VideoEditorApp() {
   }, [totalDuration]);
 
   useEffect(() => {
-    setPreviewLoadProgress(0);
-    setPreviewLoadedUntil(0);
-    setPreviewLoadMessage(sourceUrl ? "プレビューを読み込み中..." : "未読み込み");
-    setIsPreviewReady(false);
-    setPreviewCurrentTime(0);
-    setIsPreviewPlaying(false);
     setIsCropPreviewLocked(false);
   }, [sourceUrl]);
 
@@ -381,18 +384,13 @@ export default function VideoEditorApp() {
       if (!stage) {
         return;
       }
-
       const stageRect = stage.getBoundingClientRect();
       if (!stageRect.width || !stageRect.height) {
         return;
       }
-
-      const widthScale = stageRect.width / metadata.width;
-      const heightScale = stageRect.height / metadata.height;
-      const scale = Math.min(widthScale, heightScale);
+      const scale = Math.min(stageRect.width / metadata.width, stageRect.height / metadata.height);
       const width = metadata.width * scale;
       const height = metadata.height * scale;
-
       setPreviewBounds({
         left: (stageRect.width - width) / 2,
         top: (stageRect.height - height) / 2,
@@ -402,15 +400,12 @@ export default function VideoEditorApp() {
     }
 
     updatePreviewBounds();
-
     const stage = previewStageRef.current;
     const resizeObserver = typeof ResizeObserver !== "undefined" && stage
-      ? new ResizeObserver(() => updatePreviewBounds())
+      ? new ResizeObserver(updatePreviewBounds)
       : null;
-
     resizeObserver?.observe(stage);
     window.addEventListener("resize", updatePreviewBounds);
-
     return () => {
       resizeObserver?.disconnect();
       window.removeEventListener("resize", updatePreviewBounds);
@@ -449,377 +444,13 @@ export default function VideoEditorApp() {
   function setPlayheadWithPreview(nextPlayhead) {
     const safeTime = clamp(Number(nextPlayhead) || 0, 0, totalDuration);
     setPlayhead(safeTime);
-
     const video = previewVideoRef.current;
     if (video) {
-      const mappedSourceTime = timelineToSourceTime(segments, safeTime);
-      const delta = Math.abs((Number(video.currentTime) || 0) - mappedSourceTime);
-      if (delta > 0.05) {
-        video.currentTime = mappedSourceTime;
+      const sourceTime = timelineToSourceTime(segments, safeTime);
+      if (Math.abs((Number(video.currentTime) || 0) - sourceTime) > 0.05) {
+        video.currentTime = sourceTime;
       }
     }
-  }
-
-  function cloneSegments(items) {
-    return items.map((segment) => ({ ...segment }));
-  }
-
-  function createUndoSnapshot() {
-    return {
-      segments: cloneSegments(segments),
-      selectionStart,
-      selectionEnd,
-      playhead,
-      clipboard: cloneSegments(clipboard),
-      clipBank: Array.isArray(clipBank) ? clipBank.map((c) => cloneSegments(c)) : [],
-      cutMarkers: Array.isArray(cutMarkers) ? cutMarkers.map((m) => (m && typeof m === 'object' ? { start: m.start, end: m.end } : { start: Number(m) || 0, end: Number(m) || 0 })) : [],
-      crop: { ...crop },
-      audioGainPercent: Number(audioGainPercent || 100),
-      audioNormalize: Boolean(audioNormalize),
-      isCropPreviewLocked,
-      outputPath,
-      previewCurrentTime
-    };
-  }
-
-  function pushUndoSnapshot() {
-    setUndoStack((current) => [...current.slice(-29), createUndoSnapshot()]);
-  }
-
-  function restoreUndoSnapshot(snapshot) {
-    if (!snapshot) {
-      return;
-    }
-    const snapSegments = cloneSegments(snapshot.segments || []);
-    setSegments(snapSegments);
-    setSelectionStart(snapshot.selectionStart);
-    setSelectionEnd(snapshot.selectionEnd);
-    setPlayheadWithPreview(snapshot.playhead);
-    setClipboard(cloneSegments(snapshot.clipboard));
-    setClipBank(Array.isArray(snapshot.clipBank) ? snapshot.clipBank.map((c) => cloneSegments(c)) : []);
-
-    // Restore cut markers. Markers may be stored as source times or timeline times.
-    // If a marker's start maps to a timeline position within the composed timeline,
-    // convert it. Otherwise, keep numeric values as-is (assume already timeline-based).
-    const composedDuration = timelineDuration(snapSegments);
-    const restoredMarkers = Array.isArray(snapshot.cutMarkers)
-      ? snapshot.cutMarkers.map((m) => {
-          const raw = m && typeof m === 'object' ? { start: Number(m.start) || 0, end: Number(m.end) || 0 } : { start: Number(m) || 0, end: Number(m) || 0 };
-          const maybeStart = sourceToTimelineTime(snapSegments, raw.start);
-          const maybeEnd = sourceToTimelineTime(snapSegments, raw.end);
-          const start = (maybeStart !== null && maybeStart <= composedDuration) ? maybeStart : raw.start;
-          const end = (maybeEnd !== null && maybeEnd <= composedDuration) ? maybeEnd : raw.end;
-          return { start, end };
-        })
-      : [];
-    setCutMarkers(restoredMarkers);
-    setCrop({ ...snapshot.crop });
-    // restore audio settings if present
-    if (snapshot && typeof snapshot.audioGainPercent !== 'undefined') setAudioGainPercent(Number(snapshot.audioGainPercent || 100));
-    if (snapshot && typeof snapshot.audioNormalize !== 'undefined') setAudioNormalize(Boolean(snapshot.audioNormalize));
-    setIsCropPreviewLocked(Boolean(snapshot.isCropPreviewLocked));
-    setOutputPath(snapshot.outputPath);
-    setPreviewCurrentTime(snapshot.previewCurrentTime || 0);
-    resetCropSelection();
-    setErrorText("");
-  }
-
-  function handleUndo() {
-    setUndoStack((current) => {
-      if (!current.length) {
-        setErrorText("これ以上戻せる操作がありません。");
-        return current;
-      }
-
-      const next = [...current];
-      const snapshot = next.pop();
-      restoreUndoSnapshot(snapshot);
-      setStatus("ひとつ前の状態に戻しました。");
-      return next;
-    });
-    }
- 
-  function splitSegmentsAtPreviewTime(currentSegments, sourceTime, preferredTimelineTime) {
-    const targetTime = Math.max(0, Number(sourceTime) || 0);
-    const preferredTime = Math.max(0, Number(preferredTimelineTime) || 0);
-    let cursor = 0;
-    let preferredIndex = -1;
-
-    for (let index = 0; index < currentSegments.length; index += 1) {
-      const duration = segmentDuration(currentSegments[index]);
-      const start = cursor;
-      const end = cursor + duration;
-      if (preferredTime >= start && preferredTime <= end) {
-        preferredIndex = index;
-        break;
-      }
-      cursor = end;
-    }
-
-    const candidateIndexes = [];
-    if (preferredIndex >= 0) {
-      candidateIndexes.push(preferredIndex);
-    }
-    for (let index = 0; index < currentSegments.length; index += 1) {
-      if (index !== preferredIndex) {
-        candidateIndexes.push(index);
-      }
-    }
-
-    let timelineCursor = 0;
-    const timelineStarts = currentSegments.map((segment) => {
-      const start = timelineCursor;
-      timelineCursor += segmentDuration(segment);
-      return start;
-    });
-
-    for (const index of candidateIndexes) {
-      const segment = currentSegments[index];
-      const splitOffset = targetTime - Number(segment.start || 0);
-      const duration = segmentDuration(segment);
-      if (!(splitOffset > 0 && splitOffset < duration)) {
-        continue;
-      }
-
-      const splitPoint = Number(segment.start) + splitOffset;
-      const nextSegments = [];
-      currentSegments.forEach((item, itemIndex) => {
-        if (itemIndex !== index) {
-          nextSegments.push({ ...item });
-          return;
-        }
-
-        nextSegments.push({ start: item.start, end: splitPoint });
-        nextSegments.push({ start: splitPoint, end: item.end });
-      });
-
-      return {
-        nextSegments,
-        timelineSplitTime: timelineStarts[index] + splitOffset
-      };
-    }
-
-    return null;
-  }
-
-  function splitSegmentsAtTimelinePositions(currentSegments, splitTimes) {
-    const total = timelineDuration(currentSegments);
-    const times = Array.from(new Set((splitTimes || []).map((t) => Number(t) || 0))).sort((a, b) => a - b).filter((t) => t > 0 && t < total);
-    if (!times.length) return null;
-
-    let timelineCursor = 0;
-    const nextSegments = [];
-
-    for (const segment of currentSegments) {
-      const segDuration = segmentDuration(segment);
-      const segStartTime = timelineCursor;
-      const segEndTime = timelineCursor + segDuration;
-
-      const innerSplits = times.filter((t) => t > segStartTime && t < segEndTime).map((t) => segment.start + (t - segStartTime));
-
-      if (!innerSplits.length) {
-        nextSegments.push({ ...segment });
-      } else {
-        const boundaries = [segment.start, ...innerSplits, segment.end];
-        for (let i = 0; i < boundaries.length - 1; i += 1) {
-          const a = boundaries[i];
-          const b = boundaries[i + 1];
-          if (b - a > 1e-9) {
-            nextSegments.push({ start: a, end: b });
-          }
-        }
-      }
-
-      timelineCursor = segEndTime;
-    }
-
-    return nextSegments;
-  }
-
-  function updatePreviewLoadState(video) {
-    if (!video) {
-      return;
-    }
-
-    const duration = Math.max(0, Number(video.duration) || Number(metadata.duration) || 0);
-    let bufferedUntil = 0;
-
-    if (video.buffered?.length) {
-      for (let index = 0; index < video.buffered.length; index += 1) {
-        bufferedUntil = Math.max(bufferedUntil, Number(video.buffered.end(index)) || 0);
-      }
-    }
-
-    const loadedUntil = duration > 0 ? clamp(bufferedUntil, 0, duration) : 0;
-    const complete = (duration > 0 && loadedUntil >= Math.max(duration - 0.25, duration * 0.98)) || video.readyState >= 4;
-    const progress = complete ? 100 : duration > 0 ? (loadedUntil / duration) * 100 : video.readyState >= 1 ? 15 : 0;
-
-    setPreviewLoadedUntil(complete ? duration : loadedUntil);
-    setPreviewLoadProgress(progress);
-    setIsPreviewReady(complete);
-
-    if (complete) {
-      setPreviewLoadMessage("プレビューの再生準備が完了しました。");
-      return;
-    }
-
-    if (progress > 0) {
-      setPreviewLoadMessage(`プレビューを読み込み中... ${Math.round(progress)}%`);
-      return;
-    }
-
-    setPreviewLoadMessage("プレビューを読み込み中...");
-  }
-
-  function handlePreviewVideoLoadStart(event) {
-    setPreviewLoadProgress(0);
-    setPreviewLoadedUntil(0);
-    setPreviewLoadMessage("プレビューを読み込み中...");
-    setIsPreviewReady(false);
-    updatePreviewLoadState(event.currentTarget);
-  }
-
-  function handlePreviewVideoProgress(event) {
-    updatePreviewLoadState(event.currentTarget);
-  }
-
-  function handlePreviewVideoReady(event) {
-    setPreviewCurrentTime(Number(event.currentTarget.currentTime) || 0);
-    updatePreviewLoadState(event.currentTarget);
-  }
-
-  function handlePreviewVideoWaiting(event) {
-    updatePreviewLoadState(event.currentTarget);
-    setPreviewLoadMessage("プレビューを追加で読み込み中...");
-  }
-
-  function handlePreviewVideoError() {
-    setPreviewLoadProgress(0);
-    setPreviewLoadedUntil(0);
-    setPreviewLoadMessage("プレビューの読み込みに失敗しました。");
-    setIsPreviewReady(false);
-  }
-
-  function handlePreviewTimeUpdate(event) {
-    const currentTime = Number(event.currentTarget.currentTime) || 0;
-    setPreviewCurrentTime(currentTime);
-    const timelineTime = sourceToTimelineTime(segments, currentTime);
-    if (timelineTime !== null) {
-      setPlayhead((current) => Math.abs(current - timelineTime) > 0.15 ? timelineTime : current);
-    }
-  }
-
-  async function handleTogglePreviewPlayback() {
-    const video = previewVideoRef.current;
-    if (!video) {
-      return;
-    }
-
-    try {
-      if (video.paused) {
-        await video.play();
-        setIsPreviewPlaying(true);
-      } else {
-        video.pause();
-        setIsPreviewPlaying(false);
-      }
-    } catch (error) {
-      console.error("Failed to toggle preview playback", error);
-      setErrorText("プレビューの再生操作に失敗しました。");
-    }
-  }
-
-  useEffect(() => {
-    const v = previewVideoRef.current;
-    if (v) {
-      v.playbackRate = previewPlaybackRate;
-    }
-    // initialize WebAudio graph for preview audio
-    try {
-      if (audioContextRef.current == null && typeof window !== 'undefined' && window.AudioContext) {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      const ctx = audioContextRef.current;
-      if (ctx && v) {
-        // reconnect source if needed
-        if (audioSourceRef.current) {
-          try { audioSourceRef.current.disconnect(); } catch (e) { logError("VideoEditorApp.audioSourceRef.disconnect", e); }
-          audioSourceRef.current = null;
-        }
-        const src = ctx.createMediaElementSource(v);
-        audioSourceRef.current = src;
-
-        // create gain node
-        if (!audioGainNodeRef.current) audioGainNodeRef.current = ctx.createGain();
-        const gainNode = audioGainNodeRef.current;
-
-        // compressor for normalize-like behavior
-        if (!audioCompressorRef.current) audioCompressorRef.current = ctx.createDynamicsCompressor();
-        const comp = audioCompressorRef.current;
-
-        // connect chain: source -> (compressor?) -> gain -> destination
-        try { src.disconnect(); } catch (e) { logError("VideoEditorApp.src.disconnect", e); }
-        if (audioNormalize) {
-          src.connect(comp);
-          comp.connect(gainNode);
-        } else {
-          src.connect(gainNode);
-        }
-        gainNode.connect(ctx.destination);
-      }
-      } catch (e) {
-      // ignore WebAudio init failures, but log for diagnostics
-      try { logError('VideoEditorApp.WebAudio.init', e); } catch (err) { console.warn('WebAudio init failed', e); }
-    }
-    }, [previewPlaybackRate, sourceUrl, audioNormalize]);
-
-  // update audio parameters when options change
-  useEffect(() => {
-    const ctx = audioContextRef.current;
-    const gainNode = audioGainNodeRef.current;
-    if (!ctx || !gainNode) return;
-    const linear = Math.max(0, (Number(audioGainPercent) || 100) / 100);
-    try {
-      gainNode.gain.cancelScheduledValues(ctx.currentTime);
-      gainNode.gain.setValueAtTime(linear, ctx.currentTime);
-    } catch (e) { logError('VideoEditorApp.gain.setValue', e); }
-    // enable/disable compressor connection
-    const src = audioSourceRef.current;
-    const comp = audioCompressorRef.current;
-    if (src && comp && gainNode) {
-      try {
-        src.disconnect();
-      } catch (e) { logError('VideoEditorApp.src.disconnect', e); }
-      if (audioNormalize) {
-        src.connect(comp);
-        comp.disconnect();
-        comp.connect(gainNode);
-      } else {
-        try { comp.disconnect(); } catch (e) { logError('VideoEditorApp.comp.disconnect', e); }
-        src.connect(gainNode);
-      }
-    }
-  }, [audioGainPercent, audioNormalize]);
-
-  // apply gain changes to preview when percent or normalize changes
-  useEffect(() => {
-    const v = previewVideoRef.current;
-    const ctx = audioContextRef.current;
-    const gainNode = audioGainNodeRef.current;
-    if (!v || !ctx || !gainNode) return;
-    const linear = Math.max(0, (Number(audioGainPercent) || 100) / 100);
-    try {
-      gainNode.gain.cancelScheduledValues(ctx.currentTime);
-      gainNode.gain.setValueAtTime(linear, ctx.currentTime);
-    } catch (e) { logError('VideoEditorApp.gain.setValue', e); }
-  }, [audioGainPercent, audioNormalize]);
-
-  function handleTogglePreviewSpeed() {
-    const next = previewPlaybackRate === 1 ? 0.5 : 1;
-    setPreviewPlaybackRate(next);
-    const v = previewVideoRef.current;
-    if (v) v.playbackRate = next;
-    setStatus(next === 1 ? "プレビュー速度を通常に戻しました。" : "プレビュー速度を低速（0.5×）にしました。");
   }
 
   // Centralized shortcut handling
@@ -827,14 +458,19 @@ export default function VideoEditorApp() {
     onTogglePreviewPlayback: handleTogglePreviewPlayback,
     onCut: handleCut,
     onReturn: handleUndo,
+    onCopy: handleCopy,
+    onPaste: handlePaste,
+    onDelete: handleDelete,
+    onCrop: handleStartCropSelection,
+    onExport: () => setIsExportConfirmOpen(true),
     segmentsLength: segments.length,
     isExporting,
-    setErrorText
+    setErrorMessage: messages.setErrorMessage
   });
 
   function handleSplitAtPreview() {
     if (!segments.length) {
-      setErrorText("先に動画を読み込んでください。");
+      messages.setErrorMessage(editorMessages.chooseVideoFirst);
       return;
     }
 
@@ -843,12 +479,12 @@ export default function VideoEditorApp() {
       const splitTimes = [selectedRange.start, selectedRange.end];
       const next = splitSegmentsAtTimelinePositions(segments, splitTimes);
       if (!next) {
-        setErrorText("選択範囲で分割できる場所がありません。");
+        messages.setErrorMessage("選択範囲で分割できる場所がありません。");
         return;
       }
       // if no change
       if (next.length === segments.length && next.every((s, i) => s.start === segments[i]?.start && s.end === segments[i]?.end)) {
-        setErrorText("選択範囲は既にセグメント境界に分かれています。");
+        messages.setErrorMessage("選択範囲は既にセグメント境界に分かれています。");
         return;
       }
       pushUndoSnapshot();
@@ -856,8 +492,8 @@ export default function VideoEditorApp() {
       setSelectionStart(selectedRange.start);
       setSelectionEnd(selectedRange.end);
       setPlayheadWithPreview(selectedRange.start);
-      setStatus(`選択範囲 ${formatVideoTime(selectedRange.start)} - ${formatVideoTime(selectedRange.end)} で分割しました。`);
-      setErrorText("");
+      messages.setStatusMessage(`選択範囲 ${formatVideoTime(selectedRange.start)} - ${formatVideoTime(selectedRange.end)} で分割しました。`);
+      messages.clearErrorOnly();
       return;
     }
 
@@ -866,7 +502,7 @@ export default function VideoEditorApp() {
     const result = splitSegmentsAtPreviewTime(segments, sourceTime, playhead);
 
     if (!result) {
-      setErrorText("現在の画面位置では分割できません。セグメントの内側で停止してください。");
+      messages.setErrorMessage("現在の画面位置では分割できません。セグメントの内側で停止してください。");
       return;
     }
 
@@ -875,8 +511,8 @@ export default function VideoEditorApp() {
     setSelectionStart(result.timelineSplitTime);
     setSelectionEnd(result.timelineSplitTime);
     setPlayheadWithPreview(result.timelineSplitTime);
-    setStatus(`画面の位置 ${formatVideoTime(sourceTime)} で分割しました。`);
-    setErrorText("");
+    messages.setStatusMessage(`画面の位置 ${formatVideoTime(sourceTime)} で分割しました。`);
+    messages.clearErrorOnly();
   }
 
   function getPreviewPoint(clientX, clientY) {
@@ -948,12 +584,12 @@ export default function VideoEditorApp() {
       setCropDraft(null);
     }
     setIsCropSelecting(true);
-    setStatus("プレビュー上をドラッグして、残したい範囲を指定してください。");
+    messages.setStatusMessage(editorMessages.cropInstruction);
   }
 
   function handleToggleCropPreviewLock() {
     if (!hasCrop) {
-      setErrorText("先に crop 範囲を指定してください。");
+      messages.setErrorMessage("先に crop 範囲を指定してください。");
       return;
     }
 
@@ -1010,7 +646,7 @@ export default function VideoEditorApp() {
     const usePrev = !(cropInteraction && cropInteraction.mode === "new");
     const nextCrop = finalizeCropSelection(cropDraft, previewBounds, usePrev && hasCrop ? crop : null);
     if (!nextCrop) {
-      setStatus("ドラッグして残したい範囲を選択してください。");
+      messages.setStatusMessage(editorMessages.cropSelectAgain);
       setCropDraft(null);
       setCropInteraction(null);
       return;
@@ -1024,26 +660,29 @@ export default function VideoEditorApp() {
     // selected area (prevents reverting to the previous visual state).
     setIsCropPreviewLocked(true);
     setCropInteraction(null);
-    setErrorText("");
-    setStatus("プレビューで crop 範囲を更新しました。");
+    messages.clearErrorOnly();
+    messages.setStatusMessage(editorMessages.cropUpdated);
+    
+    // Add crop log
+    setOperationLogs((current) => [...current, createCropLog(nextCrop, true)]);
   }
 
   async function loadSource(result) {
     if (!result?.filePath) {
       stopLoadingOverlay();
-      setErrorText("読み込み対象の動画ファイルが見つかりません。");
-      setStatus("読み込みに失敗しました。");
+      messages.setErrorMessage(editorMessages.videoNotFound);
+      messages.setStatusMessage(editorMessages.loadFailed);
       return;
     }
 
     if (!editorApi) {
       stopLoadingOverlay();
-      setErrorText("Electron 上で起動してください。");
-      setStatus("読み込みに失敗しました。");
+      messages.setErrorMessage(editorMessages.runOnElectron);
+      messages.setStatusMessage(editorMessages.loadFailed);
       return;
     }
 
-    setErrorText("");
+    messages.clearErrorOnly();
     setIsLoading(true);
     setLoadingProgress(0);
     setLoadingMessage("ファイル選択中...");
@@ -1075,7 +714,7 @@ export default function VideoEditorApp() {
       setClipboard([]);
       setOutputPath("");
       setCrop(emptyCrop);
-      setUndoStack([]);
+      clearUndoHistory();
       resetCropSelection();
       
       setLoadingProgress(100);
@@ -1085,18 +724,22 @@ export default function VideoEditorApp() {
       loadCompletionTimeoutRef.current = setTimeout(() => {
         stopLoadingOverlay();
         setStatus("動画を読み込みました。切り取り範囲と crop を調整してください。");
+        // Add load log after metadata is set
+        setTimeout(() => {
+          setOperationLogs((current) => [...current, createLoadLog(result.fileName || result.filePath.split(/[\\/]/).pop(), info)]);
+        }, 0);
       }, 500);
     } catch (error) {
       stopLoadingOverlay();
       setLoadingProgress(0);
-      setErrorText(error?.message || "動画の読み込みに失敗しました。");
-      setStatus("読み込みに失敗しました。");
+      messages.setErrorMessage(error?.message || editorMessages.videoLoadingFailed);
+      messages.setStatusMessage(editorMessages.loadFailed);
     }
   }
 
   async function handleChooseSource() {
     if (!editorApi) {
-      setErrorText("Electron 上で起動してください。");
+      messages.setErrorMessage("⊠Electron 上で起動してください。");
       return;
     }
     setIsLoading(true);
@@ -1109,7 +752,7 @@ export default function VideoEditorApp() {
       const result = await editorApi.selectSource();
       if (!result) {
         stopLoadingOverlay();
-        setStatus("動画の選択をキャンセルしました。");
+        messages.setStatusMessage("動画の選択をキャンセルしました。");
         return;
       }
 
@@ -1117,14 +760,14 @@ export default function VideoEditorApp() {
     } catch (error) {
       stopLoadingOverlay();
       setLoadingProgress(0);
-      setErrorText(error?.message || "動画ファイルの選択に失敗しました。");
-      setStatus("読み込みを開始できませんでした。");
+      messages.setErrorMessage(error?.message || editorMessages.videoSelectionFailed);
+      messages.setStatusMessage(editorMessages.loadFailed);
     }
   }
 
   async function handleChooseOutput() {
     if (!editorApi) {
-      setErrorText("Electron 上で起動してください。");
+      messages.setErrorMessage(editorMessages.runOnElectron);
       return;
     }
     const result = await editorApi.selectOutput({ suggestedName: sourceName || "edited-video.mp4" });
@@ -1132,16 +775,16 @@ export default function VideoEditorApp() {
       return;
     }
     setOutputPath(result.filePath);
-    setStatus(`出力先を設定しました: ${result.filePath}`);
+    messages.setStatusMessage(`出力先を設定しました: ${result.filePath}`);
   }
 
   function handleOpenExportConfirm() {
     if (!sourcePath || !segments.length) {
-      setErrorText("出力する動画を先に読み込んでください。");
+      messages.setErrorMessage(editorMessages.chooseVideoFirst);
       return;
     }
 
-    setErrorText("");
+    messages.clearErrorOnly();
     setIsExportConfirmOpen(true);
   }
 
@@ -1167,30 +810,54 @@ export default function VideoEditorApp() {
     setErrorText("");
   }
 
-  function handleCopy() {
-    const copied = extractRange(segments, selectedRange.start, selectedRange.end);
-    if (!copied.length) {
-      setErrorText("コピーする範囲がありません。");
-      return;
+  function addOperationLog(operationType, details = {}) {
+    const log = 
+      operationType === "copy" ? createCopyLog(selectedDuration, selectionStart, selectionEnd) :
+      operationType === "cut" ? createCutLog(playhead) :
+      operationType === "paste" ? createPasteLog(playhead, timelineDuration(clipboard), clipboardDuration) :
+      operationType === "delete" ? createDeleteLog(selectedRange.start, selectedRange.end, selectedDuration) :
+      operationType === "undo" ? createUndoLog() :
+      operationType === "crop" ? createCropLog(crop, hasCrop) :
+      operationType === "export" ? createExportLog(sourceName, outputPath, segments.length, metadata) :
+      operationType === "load" ? createLoadLog(sourceName, metadata) :
+      null;
+
+    if (log) {
+      setOperationLogs((current) => [...current, log]);
     }
-    setClipboard(copied);
-    setClipBank((current) => [copied, ...current].slice(0, 20));
-    setPlayheadWithPreview(selectedRange.end);
-    setStatus(`範囲をコピーしました。長さ ${formatVideoTime(timelineDuration(copied))}`);
-    setErrorText("");
   }
+
+  const handleCopy = useMemo(
+    () => {
+      const fn = createHandleCopySelection({
+        segments,
+        selectionStart,
+        selectionEnd,
+        setClipboard,
+        setClipBank,
+        setPlayheadWithPreview,
+        messages,
+      });
+      return () => {
+        fn();
+        addOperationLog("copy");
+      };
+    },
+    [segments, selectionStart, selectionEnd, setClipboard, setClipBank, setPlayheadWithPreview, messages]
+  );
 
   function handleDelete() {
     if (selectedDuration === 0) {
-      setErrorText("削除する範囲を指定してください。");
+      messages.setErrorMessage(editorMessages.noSelection);
       return;
     }
     pushUndoSnapshot();
     setSegments(removeRange(segments, selectedRange.start, selectedRange.end));
     setSelectionEnd(selectedRange.start);
     setPlayheadWithPreview(selectedRange.start);
-    setStatus("選択範囲を削除しました。");
-    setErrorText("");
+    messages.setStatusMessage(editorMessages.rangeDeleted);
+    messages.clearErrorOnly();
+    addOperationLog("delete");
   }
 
   function handleDeleteSegment(index) {
@@ -1205,8 +872,9 @@ export default function VideoEditorApp() {
     setSelectionStart((current) => clamp(current, 0, nextDuration));
     setSelectionEnd((current) => clamp(current, 0, nextDuration));
     setPlayheadWithPreview(clamp(playhead, 0, nextDuration));
-    setStatus(`パーツ ${index + 1} を削除しました。`);
-    setErrorText("");
+    messages.setStatusMessage(`パーツ ${index + 1} を削除しました。`);
+    messages.clearErrorOnly();
+    addOperationLog("delete");
   }
 
   function handleCut() {
@@ -1218,12 +886,12 @@ export default function VideoEditorApp() {
 
     const next = splitSegmentsAtTimelinePositions(segments, [splitTime]);
     if (!next) {
-      setErrorText("現在の位置では切り取りできません。");
+      messages.setErrorMessage(editorMessages.cantCutHere);
       return;
     }
 
     if (next.length === segments.length && next.every((segment, index) => segment.start === segments[index]?.start && segment.end === segments[index]?.end)) {
-      setErrorText("この位置はすでに切り取り済みです。別の位置で押してください。");
+      messages.setErrorMessage(editorMessages.alreadyCutHere);
       return;
     }
 
@@ -1234,13 +902,14 @@ export default function VideoEditorApp() {
     setSelectionStart(splitTime);
     setSelectionEnd(splitTime);
     setPlayheadWithPreview(splitTime);
-    setStatus(`${formatVideoTime(splitTime)} でタイムラインを分割しました。`);
-    setErrorText("");
+    messages.setStatusMessage(`${formatVideoTime(splitTime)} でタイムラインを分割しました。`);
+    messages.clearErrorOnly();
+    addOperationLog("cut");
   }
 
   function handlePaste() {
     if (!clipboard.length) {
-      setErrorText("貼り付けるクリップがありません。先にコピーまたは切り取りを行ってください。");
+      messages.setErrorMessage(editorMessages.nothingToPaste);
       return;
     }
 
@@ -1253,6 +922,7 @@ export default function VideoEditorApp() {
     setPlayheadWithPreview(playhead + insertedDuration);
     setStatus(`貼り付けました。長さ ${formatVideoTime(insertedDuration)} を挿入しました。`);
     setErrorText("");
+    addOperationLog("paste");
   }
 
   function handleInsertClip(clip) {
@@ -1270,18 +940,18 @@ export default function VideoEditorApp() {
 
   async function handleExport() {
     if (!editorApi) {
-      setErrorText("Electron 上で起動してください。");
+      messages.setErrorMessage(editorMessages.runOnElectron);
       return;
     }
 
     if (!sourcePath || !segments.length) {
-      setErrorText("出力する動画を先に読み込んでください。");
+      messages.setErrorMessage(editorMessages.chooseVideoFirst);
       return;
     }
 
     const safeSegments = segments.filter((segment) => segmentDuration(segment) > 0);
     if (!safeSegments.length) {
-      setErrorText("出力できるセグメントがありません。");
+      messages.setErrorMessage("出力できるセグメントがありません。");
       return;
     }
 
@@ -1297,8 +967,8 @@ export default function VideoEditorApp() {
     setExportMessage("出力準備中...");
     setExportIndeterminate(true);
     exportStartTimeRef.current = Date.now();
-    setErrorText("");
-    setStatus("動画を出力中...");
+    messages.clearErrorOnly();
+    messages.setStatusMessage("動画を出力中...");
 
     try {
       const result = await editorApi.exportVideo({
@@ -1313,13 +983,15 @@ export default function VideoEditorApp() {
       const outputPaths = Array.isArray(result?.outputPaths) && result.outputPaths.length
         ? result.outputPaths
         : [chosenOutput];
-      setStatus(`${outputPaths.length} 個のファイルを出力しました。`);
+      messages.setStatusMessage(`${outputPaths.length} 個のファイルを出力しました。`);
+      
+      // Add export log
+      setOperationLogs((current) => [...current, createExportLog(sourceName, chosenOutput, safeSegments.length, metadata)]);
 
       await editorApi.revealInFolder(outputPaths[0]);
     } catch (error) {
-      setErrorText(error?.message || "動画の出力に失敗しました。");
-
-      setStatus("エラー: 動画の出力に失敗しました。");
+      messages.setErrorMessage(error?.message || editorMessages.exportFailed);
+      messages.setStatusMessage("エラー: 動画の出力に失敗しました。");
     } finally {
       setIsExporting(false);
       resetExportOverlay();
@@ -1337,6 +1009,18 @@ export default function VideoEditorApp() {
       </main>
     );
   }
+
+  // Show log viewer if requested
+  if (isShowingLogViewer) {
+    return (
+      <OperationLogViewer 
+        logs={operationLogs}
+        onClose={() => setIsShowingLogViewer(false)}
+        onClearLogs={() => setOperationLogs([])}
+      />
+    );
+  }
+
   return (
     <>
       <LoadingIndicator
@@ -1354,6 +1038,10 @@ export default function VideoEditorApp() {
         segments={exportSegments}
         startTime={exportStartTimeRef.current}
       />
+      <ShortcutSettingsModal 
+        isOpen={isShortcutSettingsOpen}
+        onClose={() => setIsShortcutSettingsOpen(false)}
+      />
     <main className="editor-shell">
       <section className="hero card">
         <div className="hero-head">
@@ -1365,6 +1053,23 @@ export default function VideoEditorApp() {
 
           <div className="hero-actions" style={{ marginRight: 12 }}>
             <button type="button" onClick={handleChooseSource}>動画を選択</button>
+            <button 
+              type="button" 
+              className="secondary-button" 
+              onClick={() => setIsShowingLogViewer(true)}
+              disabled={operationLogs.length === 0}
+              title={operationLogs.length === 0 ? "操作がないため無効です" : "編集操作のログを表示"}
+            >
+              📋 ログを表示 ({operationLogs.length})
+            </button>
+            <button 
+              type="button" 
+              className="ghost-button" 
+              onClick={() => setIsShortcutSettingsOpen(true)}
+              title="ショートカットキーの設定"
+            >
+              ⌨️ ショートカット
+            </button>
           </div>
         </div>
 
@@ -1417,9 +1122,9 @@ export default function VideoEditorApp() {
                     playsInline
                     onTimeUpdate={handlePreviewTimeUpdate}
                     onSeeked={handlePreviewTimeUpdate}
-                    onPlay={() => setIsPreviewPlaying(true)}
-                    onPause={() => setIsPreviewPlaying(false)}
-                    onEnded={() => setIsPreviewPlaying(false)}
+                    onPlay={handlePreviewPlay}
+                    onPause={handlePreviewPause}
+                    onEnded={handlePreviewPause}
                     onLoadStart={handlePreviewVideoLoadStart}
                     onLoadedMetadata={handlePreviewVideoReady}
                     onLoadedData={handlePreviewVideoReady}
@@ -1628,91 +1333,23 @@ export default function VideoEditorApp() {
         </aside>
       </section>
 
-      {isExportConfirmOpen ? (
-        <div className="export-confirm-overlay" role="dialog" aria-modal="true" aria-label="動画出力の確認">
-          <div className="export-confirm-dialog card">
-            <div className="panel-head">
-              <div>
-                <p className="eyebrow">Export Confirmation</p>
-                <h2>動画出力の確認</h2>
-              </div>
-              <div className="panel-head-meta">
-                <span>確認後に出力を開始します</span>
-              </div>
-            </div>
-
-            <div className="export-confirm-body">
-              <div className="export-meta">
-                <span>ソース: {sourceName || "未選択"}</span>
-                <span>セグメント数: {segments.length}</span>
-                <span>出力映像長: {formatVideoTime(totalDuration)}</span>
-                {hasCrop ? (
-                  <table className="export-crop-table" style={{ borderCollapse: "collapse", marginTop: 6 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ textAlign: "left", padding: 4 }}>項目</th>
-                        <th style={{ textAlign: "left", padding: 4 }}>%</th>
-                        <th style={{ textAlign: "left", padding: 4 }}>px</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td style={{ padding: 4 }}>left</td>
-                        <td style={{ padding: 4 }}>{(crop.left || 0).toFixed(2)}%</td>
-                        <td style={{ padding: 4 }}>{metadata.width ? Math.round((crop.left || 0) / 100 * metadata.width) + 'px' : '-'}</td>
-                      </tr>
-                      <tr>
-                        <td style={{ padding: 4 }}>top</td>
-                        <td style={{ padding: 4 }}>{(crop.top || 0).toFixed(2)}%</td>
-                        <td style={{ padding: 4 }}>{metadata.height ? Math.round((crop.top || 0) / 100 * metadata.height) + 'px' : '-'}</td>
-                      </tr>
-                      <tr>
-                        <td style={{ padding: 4 }}>right</td>
-                        <td style={{ padding: 4 }}>{(crop.right || 0).toFixed(2)}%</td>
-                        <td style={{ padding: 4 }}>{metadata.width ? Math.round((crop.right || 0) / 100 * metadata.width) + 'px' : '-'}</td>
-                      </tr>
-                      <tr>
-                        <td style={{ padding: 4 }}>bottom</td>
-                        <td style={{ padding: 4 }}>{(crop.bottom || 0).toFixed(2)}%</td>
-                        <td style={{ padding: 4 }}>{metadata.height ? Math.round((crop.bottom || 0) / 100 * metadata.height) + 'px' : '-'}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                ) : (
-                  <span>現在の crop: {formatCrop(crop)}</span>
-                )}
-                <span>音声: {metadata.hasAudio ? "あり" : "なし"}</span>
-              </div>
-
-              <div className="export-meta">
-                <span>出力先: {outputPath || "未設定"}</span>
-                {hasCrop ? (
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={preserveCropResolution}
-                      onChange={(event) => setPreserveCropResolution(event.target.checked)}
-                    />
-                    crop後も元解像度を維持する
-                  </label>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="action-row export-confirm-actions">
-              <button type="button" className="secondary-button" onClick={handleChooseOutput} disabled={isExporting}>
-                {outputPath ? "出力先を変更" : "出力先を選ぶ"}
-              </button>
-              <button type="button" className="ghost-button" onClick={handleCloseExportConfirm} disabled={isExporting}>
-                キャンセル
-              </button>
-              <button type="button" onClick={handleExport} disabled={isExporting || !sourcePath || !segments.length}>
-                {isExporting ? "出力中..." : "この内容で出力"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <ExportConfirmDialog
+        isVisible={isExportConfirmOpen}
+        sourceName={sourceName}
+        segmentsLength={segments.length}
+        totalDuration={totalDuration}
+        hasCrop={hasCrop}
+        crop={crop}
+        metadata={metadata}
+        outputPath={outputPath}
+        preserveCropResolution={preserveCropResolution}
+        setPreserveCropResolution={setPreserveCropResolution}
+        isExporting={isExporting}
+        canExport={Boolean(sourcePath && segments.length)}
+        onChooseOutput={handleChooseOutput}
+        onClose={handleCloseExportConfirm}
+        onExport={handleExport}
+      />
     </main>
     </>
   );

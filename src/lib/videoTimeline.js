@@ -60,6 +60,15 @@ export function formatSeconds(value) {
   return `${prefix}${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(fraction).padStart(3, "0")}`;
 }
 
+// Formats a duration as the editor's fixed minute-second-millisecond display.
+export function formatVideoTime(totalSeconds) {
+  const total = Math.max(0, Number(totalSeconds) || 0);
+  const minutes = Math.floor(total / 60);
+  const seconds = Math.floor(total % 60);
+  const fraction = Math.round((total - Math.floor(total)) * 1000);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(fraction).padStart(3, "0")}`;
+}
+
 export function normalizeRange(start, end, max) {
   const safeStart = clamp(Number(start) || 0, 0, max);
   const safeEnd = clamp(Number(end) || 0, 0, max);
@@ -195,6 +204,91 @@ export function insertSegmentsAt(segments, insertAt, clipboardSegments) {
 
   if (!inserted) {
     clipboardSegments.forEach((item) => pushSegment(nextSegments, item));
+  }
+
+  return nextSegments;
+}
+
+// Splits the segment containing sourceTime, preferring the segment at the given timeline position.
+export function splitSegmentsAtPreviewTime(segments, sourceTime, preferredTimelineTime) {
+  const targetTime = Math.max(0, Number(sourceTime) || 0);
+  const preferredTime = Math.max(0, Number(preferredTimelineTime) || 0);
+  let cursor = 0;
+  let preferredIndex = -1;
+
+  for (let index = 0; index < segments.length; index += 1) {
+    const duration = segmentDuration(segments[index]);
+    if (preferredTime >= cursor && preferredTime <= cursor + duration) {
+      preferredIndex = index;
+      break;
+    }
+    cursor += duration;
+  }
+
+  const candidateIndexes = preferredIndex >= 0
+    ? [preferredIndex, ...segments.map((_, index) => index).filter((index) => index !== preferredIndex)]
+    : segments.map((_, index) => index);
+
+  let timelineCursor = 0;
+  const timelineStarts = segments.map((segment) => {
+    const start = timelineCursor;
+    timelineCursor += segmentDuration(segment);
+    return start;
+  });
+
+  for (const index of candidateIndexes) {
+    const segment = segments[index];
+    const splitOffset = targetTime - Number(segment.start || 0);
+    const duration = segmentDuration(segment);
+    if (!(splitOffset > 0 && splitOffset < duration)) {
+      continue;
+    }
+
+    const splitPoint = Number(segment.start) + splitOffset;
+    const nextSegments = segments.flatMap((item, itemIndex) => (
+      itemIndex === index
+        ? [{ start: item.start, end: splitPoint }, { start: splitPoint, end: item.end }]
+        : [{ ...item }]
+    ));
+
+    return { nextSegments, timelineSplitTime: timelineStarts[index] + splitOffset };
+  }
+
+  return null;
+}
+
+// Splits every segment at valid positions measured in composed timeline seconds.
+export function splitSegmentsAtTimelinePositions(segments, splitTimes) {
+  const total = timelineDuration(segments);
+  const times = Array.from(new Set((splitTimes || []).map((time) => Number(time) || 0)))
+    .sort((first, second) => first - second)
+    .filter((time) => time > 0 && time < total);
+  if (!times.length) {
+    return null;
+  }
+
+  let timelineCursor = 0;
+  const nextSegments = [];
+
+  for (const segment of segments) {
+    const duration = segmentDuration(segment);
+    const start = timelineCursor;
+    const end = timelineCursor + duration;
+    const splits = times
+      .filter((time) => time > start && time < end)
+      .map((time) => segment.start + (time - start));
+
+    if (!splits.length) {
+      nextSegments.push({ ...segment });
+    } else {
+      const boundaries = [segment.start, ...splits, segment.end];
+      for (let index = 0; index < boundaries.length - 1; index += 1) {
+        if (boundaries[index + 1] - boundaries[index] > 1e-9) {
+          nextSegments.push({ start: boundaries[index], end: boundaries[index + 1] });
+        }
+      }
+    }
+    timelineCursor = end;
   }
 
   return nextSegments;
