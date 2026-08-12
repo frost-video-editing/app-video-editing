@@ -231,6 +231,12 @@
 
 .shortcut-actions {
   text-align: center;
+  white-space: nowrap;
+}
+
+.reset-shortcut-button {
+  margin-left: 6px;
+  color: #777;
 }
 
 .edit-button {

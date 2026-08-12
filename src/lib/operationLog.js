@@ -56,24 +56,32 @@ export function createCropLog(crop, hasCrop) {
   });
 }
 
-export function createExportLog(sourceName, outputPath, segmentCount, metadata) {
+export function createExportLog(sourceName, outputPath, segmentCount, metadata, options = {}) {
   return createOperationLog("export", {
     "ソース": sourceName || "不明",
     "出力先": outputPath || "不明",
     "セグメント数": String(segmentCount),
     "動画時間": `${metadata.duration.toFixed(2)}秒`,
     "解像度": `${metadata.width}x${metadata.height}`,
-    "音声": metadata.hasAudio ? "あり" : "なし"
+    "音声": metadata.hasAudio ? "あり" : "なし",
+    "crop": options.crop ? formatCropDetails(options.crop) : "なし",
+    "音量": options.audioGainPercent == null ? "変更なし" : `${options.audioGainPercent}%`,
+    "音声正規化": options.audioNormalize ? "あり" : "なし"
   });
 }
 
-export function createLoadLog(sourceName, metadata) {
+export function createLoadLog(sourceName, metadata, sourcePath = "") {
   return createOperationLog("load", {
     "ファイル名": sourceName || "不明",
+    "ファイルパス": sourcePath || "不明",
     "動画時間": `${metadata.duration.toFixed(2)}秒`,
     "解像度": `${metadata.width}x${metadata.height}`,
     "音声": metadata.hasAudio ? "あり" : "なし"
   });
+}
+
+function formatCropDetails(crop) {
+  return `左${Number(crop.left || 0).toFixed(2)}% / 上${Number(crop.top || 0).toFixed(2)}% / 右${Number(crop.right || 0).toFixed(2)}% / 下${Number(crop.bottom || 0).toFixed(2)}%`;
 }
 
 function formatTime(seconds) {

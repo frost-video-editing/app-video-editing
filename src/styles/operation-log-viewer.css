@@ -38,6 +38,35 @@
   overflow-x: auto;
 }
 
+.log-filters {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px;
+  border-bottom: 1px solid #eee;
+  background: #fff;
+}
+
+.log-filters label {
+  display: grid;
+  gap: 5px;
+  color: #666;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.log-filters select,
+.log-filters input {
+  min-height: 34px;
+  padding: 5px 8px;
+  border: 1px solid #ccd3df;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  font: inherit;
+}
+
 /* Main Table */
 .log-table {
   width: 100%;

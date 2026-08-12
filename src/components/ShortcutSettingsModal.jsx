@@ -4,6 +4,7 @@ import {
   saveShortcuts,
   getShortcutDescription,
   getAllShortcutNames,
+  getDefaultShortcuts,
   getKeyLabel,
   getKeyCode,
   isValidKeyPress,
@@ -26,6 +27,20 @@ export default function ShortcutSettingsModal({ isOpen, onClose }) {
       setMessage("");
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     const newConflicts = detectKeyConflicts(shortcuts);
@@ -55,10 +70,16 @@ export default function ShortcutSettingsModal({ isOpen, onClose }) {
     setTimeout(() => setMessage(""), 3000);
   }
 
+  function handleResetShortcut(shortcutName) {
+    const defaultShortcut = getDefaultShortcuts()[shortcutName];
+    setShortcuts((current) => ({ ...current, [shortcutName]: defaultShortcut }));
+    setEditingKey(null);
+    setMessage(`${getShortcutDescription(shortcutName)} をデフォルトに戻しました`);
+  }
+
   function handleReset() {
     if (window.confirm("すべてのショートカットをデフォルトに戻しますか？")) {
-      const defaultShortcuts = require("../lib/shortcutManager.js").getDefaultShortcuts();
-      setShortcuts(defaultShortcuts);
+      setShortcuts(getDefaultShortcuts());
       setEditingKey(null);
       setConflicts([]);
       setMessage("デフォルト設定に戻しました");
@@ -94,7 +115,7 @@ export default function ShortcutSettingsModal({ isOpen, onClose }) {
       <div className="shortcut-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="shortcut-modal-header">
           <h2>ショートカットキー設定</h2>
-          <button className="close-button" onClick={onClose}>✕</button>
+          <button type="button" className="close-button" onClick={onClose} aria-label="設定を閉じる">✕</button>
         </div>
 
         <div className="shortcut-modal-body">
@@ -153,10 +174,19 @@ export default function ShortcutSettingsModal({ isOpen, onClose }) {
                       </td>
                       <td className="shortcut-actions">
                         <button
+                          type="button"
                           className={`edit-button ${isEditing ? "active" : ""}`}
                           onClick={() => setEditingKey(isEditing ? null : name)}
                         >
                           {isEditing ? "キャンセル" : "変更"}
+                        </button>
+                        <button
+                          type="button"
+                          className="edit-button reset-shortcut-button"
+                          onClick={() => handleResetShortcut(name)}
+                          title="このキーだけデフォルトに戻す"
+                        >
+                          初期化
                         </button>
                       </td>
                     </tr>
@@ -168,14 +198,15 @@ export default function ShortcutSettingsModal({ isOpen, onClose }) {
         </div>
 
         <div className="shortcut-modal-footer">
-          <button className="button ghost-button" onClick={handleReset}>
+          <button type="button" className="button ghost-button" onClick={handleReset}>
             デフォルトに戻す
           </button>
           <div style={{ flex: 1 }}></div>
-          <button className="button ghost-button" onClick={onClose}>
+          <button type="button" className="button ghost-button" onClick={onClose}>
             キャンセル
           </button>
           <button 
+            type="button"
             className="button secondary-button" 
             onClick={handleSave}
             disabled={hasConflict}

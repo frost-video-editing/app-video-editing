@@ -16,6 +16,7 @@ export default function ExportProgressDialog({
 }) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const safeProgress = Math.min(100, Math.max(0, Number(progress) || 0));
+  const segmentProgress = Array.isArray(segments) ? segments : [];
 
   useEffect(() => {
     if (!isVisible || !startTime) {
@@ -46,7 +47,6 @@ export default function ExportProgressDialog({
           </div>
         </div>
 
-        {/* Timeline 1/n export is in progress */}
         <p className="export-progress-message">{message}</p>
 
         <div className="export-progress-summary">
@@ -62,6 +62,44 @@ export default function ExportProgressDialog({
             style={indeterminate ? undefined : { width: `${safeProgress}%` }}
           />
         </div>
+
+        {segmentProgress.length ? (
+          <div className="export-segment-progress">
+            <div className="export-segment-progress__head">
+              <span>ファイル別の進捗</span>
+              <span>{segmentProgress.length} 件</span>
+            </div>
+            <table className="export-segment-table">
+              <thead>
+                <tr>
+                  <th scope="col">ファイル</th>
+                  <th scope="col">進捗</th>
+                  <th scope="col">状態</th>
+                </tr>
+              </thead>
+              <tbody>
+                {segmentProgress.map((value, index) => {
+                  const segmentValue = Math.min(100, Math.max(0, Number(value) || 0));
+                  const status = segmentValue >= 100 ? "完了" : segmentValue > 0 ? "出力中" : "待機中";
+                  return (
+                    <tr key={`export-segment-${index}`}>
+                      <th scope="row">ファイル {index + 1}</th>
+                      <td>
+                        <div className="export-segment-progress__cell">
+                          <div className="loading-progress-bar" aria-label={`ファイル ${index + 1} の進捗 ${segmentValue.toFixed(1)}%`}>
+                            <div className="loading-progress-fill" style={{ width: `${segmentValue}%` }} />
+                          </div>
+                          <span>{segmentValue.toFixed(1)}%</span>
+                        </div>
+                      </td>
+                      <td>{status}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </section>
     </div>
   );

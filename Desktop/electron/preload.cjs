@@ -4,6 +4,7 @@ const EXPORT_PROGRESS_CHANNEL = "editor:export-progress";
 
 contextBridge.exposeInMainWorld("editorApi", {
   selectSource: () => ipcRenderer.invoke("editor:select-source"),
+  backupSource: (payload) => ipcRenderer.invoke("editor:backup-source", payload),
   probeVideo: (payload) => ipcRenderer.invoke("editor:probe-video", payload),
   selectOutput: (payload) => ipcRenderer.invoke("editor:select-output", payload),
   exportVideo: (payload) => ipcRenderer.invoke("editor:export-video", payload),

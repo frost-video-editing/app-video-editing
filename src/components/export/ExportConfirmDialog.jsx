@@ -1,5 +1,5 @@
-import { formatCrop } from "../lib/crop.js";
-import { formatVideoTime } from "../lib/videoTimeline.js";
+import { formatCrop } from "../../lib/crop.js";
+import { formatVideoTime } from "../../lib/videoTimeline.js";
 
 // Displays export settings and delegates every state change to the editor container.
 export default function ExportConfirmDialog({
@@ -13,6 +13,10 @@ export default function ExportConfirmDialog({
   outputPath,
   preserveCropResolution,
   setPreserveCropResolution,
+  cropScaleAlgorithm,
+  setCropScaleAlgorithm,
+  exportProfile,
+  setExportProfile,
   isExporting,
   canExport,
   onChooseOutput,
@@ -74,15 +78,39 @@ export default function ExportConfirmDialog({
 
           <div className="export-meta">
             <span>出力先: {outputPath || "未設定"}</span>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              出力プロファイル
+              <select value={exportProfile} onChange={(event) => setExportProfile(event.target.value)}>
+                <option value="fast">高速</option>
+                <option value="standard">標準</option>
+                <option value="high">高品質</option>
+                <option value="gpu">GPU優先</option>
+              </select>
+            </label>
             {hasCrop ? (
-              <label>
-                <input
-                  type="checkbox"
-                  checked={preserveCropResolution}
-                  onChange={(event) => setPreserveCropResolution(event.target.checked)}
-                />
-                crop後も元解像度を維持する
-              </label>
+              <div style={{ display: "grid", gap: 8 }}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={preserveCropResolution}
+                    onChange={(event) => setPreserveCropResolution(event.target.checked)}
+                  />
+                  crop後も元解像度を維持する
+                </label>
+                {preserveCropResolution ? (
+                  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    拡大補間
+                    <select value={cropScaleAlgorithm} onChange={(event) => setCropScaleAlgorithm(event.target.value)}>
+                      <option value="lanczos">高品質 (Lanczos)</option>
+                      <option value="bilinear">高速 (Bilinear)</option>
+                    </select>
+                  </label>
+                ) : (
+                  <span style={{ fontSize: 12, color: "#666" }}>
+                    crop後の解像度を維持するため、再拡大を行いません。高速です。
+                  </span>
+                )}
+              </div>
             ) : null}
           </div>
         </div>

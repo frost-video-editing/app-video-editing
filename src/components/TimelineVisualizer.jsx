@@ -7,6 +7,17 @@ function formatTimeShort(seconds) {
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+function parseTimeInput(value) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  const parts = text.split(":").map(Number);
+  if (parts.some((part) => !Number.isFinite(part) || part < 0)) return null;
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return (parts[0] * 60) + parts[1];
+  if (parts.length === 3) return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+  return null;
+}
+
 export default function TimelineVisualizer({
   playhead = 0,
   selectionStart = 0,
@@ -21,6 +32,24 @@ export default function TimelineVisualizer({
   const containerRef = useRef(null);
   const [draggingMode, setDraggingMode] = useState(null); // null | 'playhead' | 'start' | 'end' | 'timeline'
   const [containerWidth, setContainerWidth] = useState(0);
+  const [timeInput, setTimeInput] = useState(formatTimeShort(playhead));
+  const [isTimeInputFocused, setIsTimeInputFocused] = useState(false);
+  const [isTimeInputInvalid, setIsTimeInputInvalid] = useState(false);
+
+  useEffect(() => {
+    if (!isTimeInputFocused) setTimeInput(formatTimeShort(playhead));
+  }, [playhead, isTimeInputFocused]);
+
+  const commitTimeInput = () => {
+    const nextTime = parseTimeInput(timeInput);
+    if (nextTime === null) {
+      setIsTimeInputInvalid(true);
+      setTimeInput(formatTimeShort(playhead));
+      return;
+    }
+    setIsTimeInputInvalid(false);
+    onPlayheadChange(nextTime);
+  };
 
   useEffect(() => {
     const updateWidth = () => {
@@ -101,7 +130,19 @@ export default function TimelineVisualizer({
   return (
     <div className="timeline-visualizer-container">
       <div className="timeline-time-display">
-        <span className="time-label">{formatTimeShort(playhead)}</span>
+        <label className="timeline-time-input-label">
+          <span className="sr-only">再生位置</span>
+          <input
+            className={`timeline-time-input ${isTimeInputInvalid ? "timeline-time-input--invalid" : ""}`}
+            value={timeInput}
+            onFocus={() => { setIsTimeInputFocused(true); setIsTimeInputInvalid(false); }}
+            onChange={(event) => setTimeInput(event.target.value)}
+            onBlur={() => { commitTimeInput(); setIsTimeInputFocused(false); }}
+            onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+            aria-label="再生位置（分:秒）"
+            title="例: 10:00 で10秒へ移動"
+          />
+        </label>
         <span className="time-divider">/</span>
         <span className="time-total">{formatTimeShort(totalDuration)}</span>
       </div>
@@ -129,14 +170,16 @@ export default function TimelineVisualizer({
           {safeSegments.map((segment, index) => {
             const duration = Math.max(0, Number(segment.end) - Number(segment.start));
             const widthPct = totalDuration > 0 ? (duration / totalDuration) * 100 : 0;
-            const isSelected = Number(selectionStart) === Number(segment.start) && Number(selectionEnd) === Number(segment.end);
+            const timelineStart = safeSegments.slice(0, index).reduce((total, item) => total + Math.max(0, Number(item.end) - Number(item.start)), 0);
+            const timelineEnd = timelineStart + duration;
+            const isSelected = Number(selectionStart) === timelineStart && Number(selectionEnd) === timelineEnd;
 
             const handleSegmentClick = (e) => {
               e.preventDefault();
               e.stopPropagation();
-              onSelectionStartChange(Number(segment.start));
-              onSelectionEndChange(Number(segment.end));
-              onPlayheadChange(Number(segment.start));
+              onSelectionStartChange(timelineStart);
+              onSelectionEndChange(timelineEnd);
+              onPlayheadChange(timelineStart);
               onSegmentClick(segment, index);
             };
 

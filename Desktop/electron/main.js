@@ -472,6 +472,33 @@ function buildTimelineProgressDetails(title, totalSegments, currentSegment = 0, 
   return { text: textLines.join("\n"), segments };
 }
 
+function getExportProfile(name) {
+  const profiles = {
+    fast: { preset: "ultrafast", crf: "23", gpuPreset: "p1", gpuQuality: "23" },
+    standard: { preset: "veryfast", crf: "18", gpuPreset: "p4", gpuQuality: "19" },
+    high: { preset: "slow", crf: "16", gpuPreset: "p6", gpuQuality: "17" },
+    gpu: { preset: "veryfast", crf: "20", gpuPreset: "p1", gpuQuality: "21" }
+  };
+
+  return profiles[name] || profiles.standard;
+}
+
+function getVideoEncodingArgs(videoEncoder, profile, videoThreads = 0) {
+  if (videoEncoder === "h264_nvenc") {
+    return ["-c:v", "h264_nvenc", "-preset", profile.gpuPreset, "-tune", "hq", "-rc", "vbr", "-cq", profile.gpuQuality, "-b:v", "0"];
+  }
+
+  if (videoEncoder === "h264_qsv") {
+    return ["-c:v", "h264_qsv", "-preset", profile.gpuPreset === "p1" ? "veryfast" : "medium", "-global_quality", profile.gpuQuality];
+  }
+
+  if (videoEncoder === "h264_amf") {
+    return ["-c:v", "h264_amf", "-quality", "quality", "-rc", "cqp", "-qp_i", profile.gpuQuality, "-qp_p", profile.gpuQuality];
+  }
+
+  return ["-c:v", "libx264", "-preset", profile.preset, "-crf", profile.crf, "-threads", String(videoThreads)];
+}
+
 async function exportSingleSegment({
   sourcePath,
   outputPath,
@@ -479,6 +506,8 @@ async function exportSingleSegment({
   sourceInfo,
   cropFilter,
   preserveCropResolution = true,
+  cropScaleAlgorithm = "lanczos",
+  exportProfile = "standard",
   videoThreads = 0,
   videoEncoder = "libx264",
   audioOptions = {},
@@ -490,10 +519,9 @@ async function exportSingleSegment({
   segmentsProgressArray = null,
   segmentIndex = null
 }) {
-  // Use higher-quality encode settings when crop/rescale is applied.
-  // Use a faster preset than "slow" to avoid large slowdowns while keeping quality.
-  const videoPreset = cropFilter ? "fast" : "veryfast";
-  const videoCrf = cropFilter ? "18" : "18";
+  const profile = getExportProfile(exportProfile);
+  const videoPreset = profile.preset;
+  const videoCrf = profile.crf;
 
   const hasAudioAdjustments = audioOptions && (
     (Number.isFinite(Number(audioOptions.gainDb)) && Number(audioOptions.gainDb) !== 0) ||
@@ -574,33 +602,34 @@ async function exportSingleSegment({
     // Scale back only when the user chooses to retain the source dimensions.
     const targetWidth = Number(sourceInfo.width) || null;
     const targetHeight = Number(sourceInfo.height) || null;
+    const scaleFlags = cropScaleAlgorithm === "bilinear" ? "bilinear" : "lanczos";
     const scaleFilter = preserveCropResolution && targetWidth && targetHeight
-      ? `,scale=${targetWidth}:${targetHeight}:flags=lanczos`
+      ? `,scale=${targetWidth}:${targetHeight}:flags=${scaleFlags}`
       : "";
     const vfFilter = `${cropFilter}${scaleFilter}`;
     let videoEncodingArgs;
     if (videoEncoder === "h264_nvenc") {
       videoEncodingArgs = [
         "-c:v", "h264_nvenc",
-        "-preset", "p4",
+        "-preset", profile.gpuPreset,
         "-tune", "hq",
         "-rc", "vbr",
-        "-cq", "19",
+        "-cq", profile.gpuQuality,
         "-b:v", "0"
       ];
     } else if (videoEncoder === "h264_qsv") {
       videoEncodingArgs = [
         "-c:v", "h264_qsv",
-        "-preset", "medium",
-        "-global_quality", "19"
+        "-preset", profile.gpuPreset === "p1" ? "veryfast" : "medium",
+        "-global_quality", profile.gpuQuality
       ];
     } else if (videoEncoder === "h264_amf") {
       videoEncodingArgs = [
         "-c:v", "h264_amf",
         "-quality", "quality",
         "-rc", "cqp",
-        "-qp_i", "19",
-        "-qp_p", "19"
+        "-qp_i", profile.gpuQuality,
+        "-qp_p", profile.gpuQuality
       ];
     } else {
       videoEncodingArgs = [
@@ -642,11 +671,11 @@ async function exportSingleSegment({
     if (Number.isFinite(multiplier) && multiplier !== 1) afilters.push(`volume=${multiplier}`);
     if (audioOptions.normalize) afilters.push("dynaudnorm");
 
-    args.push("-c:v", "libx264", "-preset", videoPreset, "-crf", videoCrf, "-pix_fmt", "yuv420p", "-threads", "0");
+    args.push(...getVideoEncodingArgs(videoEncoder, profile), "-pix_fmt", "yuv420p");
     if (afilters.length > 0) args.push("-af", afilters.join(","));
     args.push("-c:a", "aac", "-b:a", "192k");
   } else {
-    args.push("-c:v", "libx264", "-preset", videoPreset, "-crf", videoCrf, "-pix_fmt", "yuv420p", "-threads", "0", "-an");
+    args.push(...getVideoEncodingArgs(videoEncoder, profile), "-pix_fmt", "yuv420p", "-an");
   }
 
   args.push("-movflags", "+faststart", outputPath);
@@ -702,6 +731,8 @@ async function exportSingleSegment({
       sourceInfo,
       cropFilter,
       preserveCropResolution,
+      cropScaleAlgorithm,
+      exportProfile,
       videoThreads,
       videoEncoder: "libx264",
       audioOptions,
@@ -778,6 +809,25 @@ async function pickSourceVideo() {
   };
 }
 
+async function backupSourceVideo(sourcePath) {
+  if (!sourcePath || !fs.existsSync(sourcePath)) {
+    throw new Error("バックアップ元の動画が見つかりません。");
+  }
+
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: "バックアップの保存先を選択",
+    defaultPath: path.join(app.getPath("downloads"), path.basename(sourcePath)),
+    filters: [{ name: "Video file", extensions: [path.extname(sourcePath).slice(1) || "mp4"] }]
+  });
+
+  if (result.canceled || !result.filePath) {
+    return null;
+  }
+
+  await fs.promises.copyFile(sourcePath, result.filePath);
+  return { filePath: result.filePath };
+}
+
 async function pickOutputVideo(suggestedName = "edited-video.mp4") {
   const downloadsDir = app.getPath("downloads");
   const result = await dialog.showSaveDialog(mainWindow, {
@@ -803,6 +853,10 @@ async function exportVideo(payload = {}) {
   const segments = Array.isArray(payload.segments) ? payload.segments : [];
   const crop = payload.crop || null;
   const preserveCropResolution = payload.preserveCropResolution !== false;
+  const cropScaleAlgorithm = payload.cropScaleAlgorithm === "bilinear" ? "bilinear" : "lanczos";
+  const exportProfile = ["fast", "standard", "high", "gpu"].includes(payload.exportProfile)
+    ? payload.exportProfile
+    : "standard";
   const separateFiles = Boolean(payload.separateFiles);
 
   if (!sourcePath || !outputPath || !segments.length) {
@@ -822,15 +876,14 @@ async function exportVideo(payload = {}) {
 
   const sourceInfo = await probeVideo(sourcePath);
   const cropFilter = buildCropFilter(crop, sourceInfo.width || 1, sourceInfo.height || 1);
-  const videoEncoder = cropFilter ? await getPreferredH264Encoder() : "libx264";
-  const videoPreset = cropFilter ? "ultrafast" : "veryfast";
-  const videoCrf = cropFilter ? "20" : "18";
   // audio adjustment options from payload (percent-based volume)
   const audioOptions = {
     gainPercent: payload.audioGainPercent != null ? Number(payload.audioGainPercent) : 100,
     normalize: Boolean(payload.audioNormalize)
   };
   const hasAudioAdjustments = (Number.isFinite(audioOptions.gainPercent) && Number(audioOptions.gainPercent) !== 100) || audioOptions.normalize;
+  const needsVideoEncode = cropFilter || hasAudioAdjustments;
+  const videoEncoder = needsVideoEncode ? await getPreferredH264Encoder() : "libx264";
   const validSegments = segments
     .map((segment) => {
       const start = Math.max(0, Number(segment.start) || 0);
@@ -901,6 +954,8 @@ async function exportVideo(payload = {}) {
           sourceInfo,
           cropFilter,
           preserveCropResolution,
+          cropScaleAlgorithm,
+          exportProfile,
           videoThreads,
           videoEncoder,
           audioOptions,
@@ -1150,6 +1205,7 @@ async function createMainWindow() {
   }
 
   ipcMain.handle("editor:select-source", async () => pickSourceVideo());
+  ipcMain.handle("editor:backup-source", async (_event, payload) => backupSourceVideo(payload?.filePath || payload));
   ipcMain.handle("editor:probe-video", async (_event, payload) => {
     const filePath = typeof payload === "string" ? payload : payload?.filePath;
     return probeVideo(String(filePath || ""));

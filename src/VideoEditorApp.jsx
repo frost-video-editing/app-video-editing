@@ -15,9 +15,8 @@ import {
 } from "./lib/videoTimeline.js";
 import TimelineVisualizer from "./components/TimelineVisualizer.jsx";
 import LoadingIndicator from "./components/LoadingIndicator.jsx";
-import ExportProgressDialog from "./components/ExportProgressDialog.jsx";
-import ExportConfirmDialog from "./components/ExportConfirmDialog.jsx";
-import OperationLogViewer from "./components/OperationLogViewer.jsx";
+import ExportScreen from "./components/export/ExportScreen.jsx";
+import OperationLogPanel from "./components/log/OperationLogPanel.jsx";
 import ShortcutSettingsModal from "./components/ShortcutSettingsModal.jsx";
 import useShortcuts from "./hooks/useShortcuts";
 import usePreviewPlayback from "./hooks/usePreviewPlayback.jsx";
@@ -78,6 +77,7 @@ export default function VideoEditorApp() {
 
   const [metadata, setMetadata] = useState({ duration: 0, width: 0, height: 0, hasAudio: false });
   const [segments, setSegments] = useState([]);
+  const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(null);
   const [selectionStart, setSelectionStart] = useState(0);
   const [selectionEnd, setSelectionEnd] = useState(0);
   const [playhead, setPlayhead] = useState(0);
@@ -89,6 +89,8 @@ export default function VideoEditorApp() {
   const [outputPath, setOutputPath] = useState("");
   const [isExportConfirmOpen, setIsExportConfirmOpen] = useState(false);
   const [preserveCropResolution, setPreserveCropResolution] = useState(true);
+  const [cropScaleAlgorithm, setCropScaleAlgorithm] = useState("lanczos");
+  const [exportProfile, setExportProfile] = useState("standard");
 
   const [isExporting, setIsExporting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -112,11 +114,30 @@ export default function VideoEditorApp() {
   const [presetName, setPresetName] = useState("");
 
   // Operation log state
-  const [operationLogs, setOperationLogs] = useState([]);
+  const [operationLogs, setOperationLogs] = useState(() => {
+    try {
+      const savedLogs = typeof window !== "undefined"
+        ? window.localStorage.getItem("videoEditor.operationLogs")
+        : null;
+      const parsedLogs = savedLogs ? JSON.parse(savedLogs) : [];
+      return Array.isArray(parsedLogs) ? parsedLogs : [];
+    } catch (error) {
+      console.error("Failed to restore operation logs", error);
+      return [];
+    }
+  });
   const [isShowingLogViewer, setIsShowingLogViewer] = useState(false);
 
   // Shortcut settings state
   const [isShortcutSettingsOpen, setIsShortcutSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("videoEditor.operationLogs", JSON.stringify(operationLogs.slice(-500)));
+    } catch (error) {
+      console.error("Failed to persist operation logs", error);
+    }
+  }, [operationLogs]);
 
   const totalDuration = useMemo(() => timelineDuration(segments), [segments]);
   const selectedRange = useMemo(
@@ -126,6 +147,7 @@ export default function VideoEditorApp() {
 
   const selectedDuration = Math.max(0, selectedRange.end - selectedRange.start);
   const clipboardDuration = useMemo(() => timelineDuration(clipboard), [clipboard]);
+  const messages = useEditorMessages(editorMessages.initialStatus);
 
   const {
     isPreviewReady,
@@ -153,11 +175,9 @@ export default function VideoEditorApp() {
     duration: metadata.duration,
     segments,
     onPlayheadChange: setPlayhead,
-    setErrorText,
-    setStatus
+    setErrorText: messages.setErrorMessage,
+    setStatus: messages.setStatusMessage
   });
-
-  const messages = useEditorMessages(editorMessages.initialStatus);
 
   const { undoStack, pushUndoSnapshot, clearUndoHistory, handleUndo } = useEditorHistory({
     editorState: {
@@ -441,12 +461,12 @@ export default function VideoEditorApp() {
     setCropInteraction(null);
   }
 
-  function setPlayheadWithPreview(nextPlayhead) {
+  function setPlayheadWithPreview(nextPlayhead, timelineSegments = segments) {
     const safeTime = clamp(Number(nextPlayhead) || 0, 0, totalDuration);
     setPlayhead(safeTime);
     const video = previewVideoRef.current;
     if (video) {
-      const sourceTime = timelineToSourceTime(segments, safeTime);
+      const sourceTime = timelineToSourceTime(timelineSegments, safeTime);
       if (Math.abs((Number(video.currentTime) || 0) - sourceTime) > 0.05) {
         video.currentTime = sourceTime;
       }
@@ -458,7 +478,7 @@ export default function VideoEditorApp() {
     onTogglePreviewPlayback: handleTogglePreviewPlayback,
     onCut: handleCut,
     onReturn: handleUndo,
-    onCopy: handleCopy,
+    onCopy: (...args) => handleCopy(...args),
     onPaste: handlePaste,
     onDelete: handleDelete,
     onCrop: handleStartCropSelection,
@@ -595,8 +615,8 @@ export default function VideoEditorApp() {
 
     const nextLocked = !isCropPreviewLocked;
     setIsCropPreviewLocked(nextLocked);
-    setErrorText("");
-    setStatus(nextLocked ? "crop 範囲だけをプレビューに固定しました。" : "プレビュー全体の表示に戻しました。");
+    messages.clearErrorOnly();
+    messages.setStatusMessage(nextLocked ? "crop 範囲だけをプレビューに固定しました。" : "プレビュー全体の表示に戻しました。");
   }
 
   function handleClearCrop() {
@@ -604,8 +624,8 @@ export default function VideoEditorApp() {
     setCrop(emptyCrop);
     setIsCropPreviewLocked(false);
     resetCropSelection();
-    setErrorText("");
-    setStatus("crop を解除しました。");
+    messages.clearErrorOnly();
+    messages.setStatusMessage("crop を解除しました。");
   }
 
   function handlePreviewPointerMove(event) {
@@ -723,10 +743,10 @@ export default function VideoEditorApp() {
       clearLoadCompletionTimeout();
       loadCompletionTimeoutRef.current = setTimeout(() => {
         stopLoadingOverlay();
-        setStatus("動画を読み込みました。切り取り範囲と crop を調整してください。");
+        messages.setStatusMessage("動画を読み込みました。切り取り範囲と crop を調整してください。");
         // Add load log after metadata is set
         setTimeout(() => {
-          setOperationLogs((current) => [...current, createLoadLog(result.fileName || result.filePath.split(/[\\/]/).pop(), info)]);
+          setOperationLogs((current) => [...current, createLoadLog(result.fileName || result.filePath.split(/[\\/]/).pop(), info, result.filePath)]);
         }, 0);
       }, 500);
     } catch (error) {
@@ -754,6 +774,16 @@ export default function VideoEditorApp() {
         stopLoadingOverlay();
         messages.setStatusMessage("動画の選択をキャンセルしました。");
         return;
+      }
+
+      if (editorApi.backupSource && window.confirm("インポートした元ファイルのバックアップを保存しますか？")) {
+        try {
+          const backup = await editorApi.backupSource(result.filePath);
+          if (backup?.filePath) messages.setStatusMessage("バックアップを保存しました。");
+        } catch (error) {
+          console.error("Failed to save source backup", error);
+          messages.setErrorMessage("バックアップを保存できませんでした。動画の読み込みは続行します。");
+        }
       }
 
       await loadSource(result);
@@ -806,8 +836,8 @@ export default function VideoEditorApp() {
     setSelectionEnd(metadata.duration);
     setPlayheadWithPreview(0);
     setClipboard([]);
-    setStatus("タイムラインを初期状態に戻しました。");
-    setErrorText("");
+    messages.setStatusMessage("タイムラインを初期状態に戻しました。");
+    messages.clearErrorOnly();
   }
 
   function addOperationLog(operationType, details = {}) {
@@ -880,7 +910,7 @@ export default function VideoEditorApp() {
   function handleCut() {
     const splitTime = clamp(Number(playhead) || 0, 0, totalDuration);
     if (splitTime <= 0 || splitTime >= totalDuration) {
-      setErrorText("先頭または末尾では切り取りできません。中間の位置で押してください。");
+      messages.setErrorMessage("先頭または末尾では切り取りできません。中間の位置で押してください。");
       return;
     }
 
@@ -907,6 +937,27 @@ export default function VideoEditorApp() {
     addOperationLog("cut");
   }
 
+  function moveSegment(index, direction) {
+    const targetIndex = index + direction;
+    if (index < 0 || targetIndex < 0 || targetIndex >= segments.length) return;
+
+    pushUndoSnapshot();
+    const nextSegments = [...segments];
+    [nextSegments[index], nextSegments[targetIndex]] = [nextSegments[targetIndex], nextSegments[index]];
+    let nextStart = 0;
+    for (let segmentIndex = 0; segmentIndex < targetIndex; segmentIndex += 1) {
+      nextStart += segmentDuration(nextSegments[segmentIndex]);
+    }
+    const nextEnd = nextStart + segmentDuration(nextSegments[targetIndex]);
+    setSegments(nextSegments);
+    setSelectedSegmentIndex(targetIndex);
+    setSelectionStart(nextStart);
+    setSelectionEnd(nextEnd);
+    setPlayheadWithPreview(nextStart, nextSegments);
+    messages.setStatusMessage(`パーツ ${targetIndex + 1} に移動しました。`);
+    messages.clearErrorOnly();
+  }
+
   function handlePaste() {
     if (!clipboard.length) {
       messages.setErrorMessage(editorMessages.nothingToPaste);
@@ -920,8 +971,8 @@ export default function VideoEditorApp() {
     setSelectionStart(playhead);
     setSelectionEnd(playhead + insertedDuration);
     setPlayheadWithPreview(playhead + insertedDuration);
-    setStatus(`貼り付けました。長さ ${formatVideoTime(insertedDuration)} を挿入しました。`);
-    setErrorText("");
+    messages.setStatusMessage(`貼り付けました。長さ ${formatVideoTime(insertedDuration)} を挿入しました。`);
+    messages.clearErrorOnly();
     addOperationLog("paste");
   }
 
@@ -934,8 +985,8 @@ export default function VideoEditorApp() {
     setSelectionStart(playhead);
     setSelectionEnd(playhead + insertedDuration);
     setPlayheadWithPreview(playhead + insertedDuration);
-    setStatus(`クリップを挿入しました。長さ ${formatVideoTime(insertedDuration)}`);
-    setErrorText("");
+    messages.setStatusMessage(`クリップを挿入しました。長さ ${formatVideoTime(insertedDuration)}`);
+    messages.clearErrorOnly();
   }
 
   async function handleExport() {
@@ -977,6 +1028,8 @@ export default function VideoEditorApp() {
         segments: safeSegments,
         crop: normalizeCropInput(crop),
         preserveCropResolution,
+        cropScaleAlgorithm,
+        exportProfile,
         audioGainPercent: Number(audioGainPercent || 100),
         audioNormalize: Boolean(audioNormalize)
       });
@@ -986,7 +1039,11 @@ export default function VideoEditorApp() {
       messages.setStatusMessage(`${outputPaths.length} 個のファイルを出力しました。`);
       
       // Add export log
-      setOperationLogs((current) => [...current, createExportLog(sourceName, chosenOutput, safeSegments.length, metadata)]);
+      setOperationLogs((current) => [...current, createExportLog(sourceName, chosenOutput, safeSegments.length, metadata, {
+        crop: normalizeCropInput(crop),
+        audioGainPercent,
+        audioNormalize
+      })]);
 
       await editorApi.revealInFolder(outputPaths[0]);
     } catch (error) {
@@ -1013,10 +1070,50 @@ export default function VideoEditorApp() {
   // Show log viewer if requested
   if (isShowingLogViewer) {
     return (
-      <OperationLogViewer 
+      <OperationLogPanel
         logs={operationLogs}
+        isOpen={isShowingLogViewer}
         onClose={() => setIsShowingLogViewer(false)}
-        onClearLogs={() => setOperationLogs([])}
+        onClearLogs={() => {
+          setOperationLogs([]);
+          window.localStorage.removeItem("videoEditor.operationLogs");
+        }}
+      />
+    );
+  }
+
+  // Show export screen if export is in progress or confirmation is open
+  if (isExportConfirmOpen || isExporting) {
+    return (
+      <ExportScreen
+        isExporting={isExporting}
+        confirmProps={{
+          sourceName,
+          segmentsLength: segments.length,
+          totalDuration,
+          hasCrop,
+          crop,
+          metadata,
+          outputPath,
+          preserveCropResolution,
+          setPreserveCropResolution,
+          cropScaleAlgorithm,
+          setCropScaleAlgorithm,
+          exportProfile,
+          setExportProfile,
+          isExporting,
+          canExport: Boolean(sourcePath && segments.length),
+          onChooseOutput: handleChooseOutput,
+          onClose: handleCloseExportConfirm,
+          onExport: handleExport
+        }}
+        progressProps={{
+          message: exportMessage || "動画を出力中...",
+          progress: exportProgress,
+          indeterminate: exportIndeterminate,
+          segments: exportSegments,
+          startTime: exportStartTimeRef.current
+        }}
       />
     );
   }
@@ -1029,14 +1126,6 @@ export default function VideoEditorApp() {
         progress={loadingProgress}
         indeterminate={loadingIndeterminate}
         startTime={loadStartTimeRef.current}
-      />
-      <ExportProgressDialog
-        isVisible={isExporting}
-        message={exportMessage || "動画を出力中..."}
-        progress={exportProgress}
-        indeterminate={exportIndeterminate}
-        segments={exportSegments}
-        startTime={exportStartTimeRef.current}
       />
       <ShortcutSettingsModal 
         isOpen={isShortcutSettingsOpen}
@@ -1053,15 +1142,13 @@ export default function VideoEditorApp() {
 
           <div className="hero-actions" style={{ marginRight: 12 }}>
             <button type="button" onClick={handleChooseSource}>動画を選択</button>
-            <button 
-              type="button" 
-              className="secondary-button" 
-              onClick={() => setIsShowingLogViewer(true)}
-              disabled={operationLogs.length === 0}
-              title={operationLogs.length === 0 ? "操作がないため無効です" : "編集操作のログを表示"}
-            >
-              📋 ログを表示 ({operationLogs.length})
-            </button>
+            <OperationLogPanel
+              logs={operationLogs}
+              isOpen={false}
+              onOpen={() => setIsShowingLogViewer(true)}
+              onClose={() => setIsShowingLogViewer(false)}
+              onClearLogs={() => setOperationLogs([])}
+            />
             <button 
               type="button" 
               className="ghost-button" 
@@ -1191,7 +1278,16 @@ export default function VideoEditorApp() {
             onPlayheadChange={setPlayheadWithPreview}
             onSelectionStartChange={setSelectionStart}
             onSelectionEndChange={setSelectionEnd}
+            onSegmentClick={(_segment, index) => setSelectedSegmentIndex(index)}
           />
+
+          {selectedSegmentIndex !== null && segments[selectedSegmentIndex] && (
+            <div className="segment-reorder-actions">
+              <span>選択パーツ: {selectedSegmentIndex + 1} / {segments.length}</span>
+              <button type="button" className="ghost-button" onClick={() => moveSegment(selectedSegmentIndex, -1)} disabled={selectedSegmentIndex === 0}>前へ</button>
+              <button type="button" className="ghost-button" onClick={() => moveSegment(selectedSegmentIndex, 1)} disabled={selectedSegmentIndex === segments.length - 1}>後へ</button>
+            </div>
+          )}
 
       {/* Audio controls for preview/editing (moved from export dialog) */}
       {metadata.hasAudio ? (
@@ -1328,28 +1424,11 @@ export default function VideoEditorApp() {
               </button>
             </div>
 
-            {errorText ? <p className="error-message">{errorText}</p> : null}
+            {messages.errorText ? <p className="error-message">{messages.errorText}</p> : null}
           </section>
         </aside>
       </section>
 
-      <ExportConfirmDialog
-        isVisible={isExportConfirmOpen}
-        sourceName={sourceName}
-        segmentsLength={segments.length}
-        totalDuration={totalDuration}
-        hasCrop={hasCrop}
-        crop={crop}
-        metadata={metadata}
-        outputPath={outputPath}
-        preserveCropResolution={preserveCropResolution}
-        setPreserveCropResolution={setPreserveCropResolution}
-        isExporting={isExporting}
-        canExport={Boolean(sourcePath && segments.length)}
-        onChooseOutput={handleChooseOutput}
-        onClose={handleCloseExportConfirm}
-        onExport={handleExport}
-      />
     </main>
     </>
   );

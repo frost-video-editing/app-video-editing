@@ -619,6 +619,57 @@ input[type="range"] {
   white-space: pre-line;
 }
 
+.export-segment-progress {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.export-segment-progress__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.export-segment-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.export-segment-table th,
+.export-segment-table td {
+  padding: 9px 8px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.export-segment-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.export-segment-table tbody th {
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.export-segment-progress__cell {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 190px;
+}
+
+.export-segment-progress__cell .loading-progress-bar {
+  height: 7px;
+}
+
 .export-progress-summary {
   display: grid;
   grid-template-columns: 1fr auto 1fr auto;
@@ -723,6 +774,38 @@ input[type="range"] {
   font-weight: 700;
   font-size: 16px;
   font-family: "Space Grotesk", monospace;
+}
+
+.timeline-time-input {
+  width: 76px;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 700;
+  font-family: "Space Grotesk", monospace;
+  text-align: center;
+}
+
+.timeline-time-input:focus {
+  border-color: var(--accent);
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.timeline-time-input--invalid {
+  border-color: #d64545;
+}
+
+.segment-reorder-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .timeline-time-display .time-total {
