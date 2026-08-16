@@ -15,6 +15,14 @@ const ffprobeStatic = require("ffprobe-static");
 const isDev = !app.isPackaged;
 let mainWindow = null;
 const EXPORT_PROGRESS_CHANNEL = "editor:export-progress";
+const activeFfmpegProcesses = new Set();
+let exportCancellationRequested = false;
+
+function createExportCancelledError() {
+  const error = new Error("EXPORT_CANCELLED");
+  error.code = "EXPORT_CANCELLED";
+  return error;
+}
 
 function resolveBinaryPath(binary) {
   const binaryPath = typeof binary === "string" ? binary : binary?.path || binary?.default || null;
@@ -219,6 +227,11 @@ function runFfmpegWithProgress(args, {
   progressMessage = "動画を出力中..."
 } = {}) {
   return new Promise((resolve, reject) => {
+    if (exportCancellationRequested) {
+      reject(createExportCancelledError());
+      return;
+    }
+
     const resolvedBinary = resolveBinaryPath(ffmpegBinary);
     const ffmpegArgs = ["-progress", "pipe:1", "-nostats", ...args];
     const spawnOptions = {
@@ -306,7 +319,7 @@ function runFfmpegWithProgress(args, {
       let handedOffToRetry = false;
 
       function retryWithFallback() {
-        if (!allowRetry || handedOffToRetry || !fallbackBinary || fallbackBinary === nextBinary || !fs.existsSync(fallbackBinary)) {
+        if (exportCancellationRequested || !allowRetry || handedOffToRetry || !fallbackBinary || fallbackBinary === nextBinary || !fs.existsSync(fallbackBinary)) {
           return false;
         }
 
@@ -323,6 +336,7 @@ function runFfmpegWithProgress(args, {
       let child;
       try {
         child = spawn(nextBinary, ffmpegArgs, spawnOptions);
+        activeFfmpegProcesses.add(child);
       } catch (error) {
         if (retryWithFallback()) {
           return;
@@ -343,6 +357,11 @@ function runFfmpegWithProgress(args, {
       });
 
       child.on("error", (error) => {
+        activeFfmpegProcesses.delete(child);
+        if (exportCancellationRequested) {
+          finishError(createExportCancelledError());
+          return;
+        }
         if (error?.code === "ENOENT" && retryWithFallback()) {
           return;
         }
@@ -351,7 +370,13 @@ function runFfmpegWithProgress(args, {
       });
 
       child.on("close", (code) => {
+        activeFfmpegProcesses.delete(child);
         if (settled || handedOffToRetry) {
+          return;
+        }
+
+        if (exportCancellationRequested) {
+          finishError(createExportCancelledError());
           return;
         }
 
@@ -378,6 +403,14 @@ function runFfmpegWithProgress(args, {
 
     spawnProcess(resolvedBinary, true);
   });
+}
+
+function cancelActiveExport() {
+  exportCancellationRequested = true;
+  for (const child of activeFfmpegProcesses) {
+    child.kill();
+  }
+  return { cancelled: true };
 }
 
 function formatTimestamp(value) {
@@ -863,6 +896,8 @@ async function exportVideo(payload = {}) {
     throw new Error("出力に必要な情報が足りません。");
   }
 
+  exportCancellationRequested = false;
+
   sendExportProgress({
     progress: 5,
     ...(() => {
@@ -1069,7 +1104,10 @@ async function exportVideo(payload = {}) {
       });
 
       return { outputPath };
-    } catch {
+    } catch (error) {
+      if (error?.code === "EXPORT_CANCELLED") {
+        throw error;
+      }
       sendExportProgress({
         progress: 22,
         message: "高速モードが使えないため通常モードに切り替えます...",
@@ -1212,6 +1250,7 @@ async function createMainWindow() {
   });
   ipcMain.handle("editor:select-output", async (_event, payload) => pickOutputVideo(payload?.suggestedName || "edited-video.mp4"));
   ipcMain.handle("editor:export-video", async (_event, payload) => exportVideo(payload));
+  ipcMain.handle("editor:cancel-export", async () => cancelActiveExport());
   ipcMain.handle("editor:reveal-in-folder", async (_event, payload) => {
     const target = typeof payload === "string" ? payload : payload?.filePath;
     if (target) {

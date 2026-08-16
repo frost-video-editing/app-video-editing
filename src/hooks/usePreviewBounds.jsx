@@ -1,10 +1,71 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { logError } from "../lib/logger.js";
 import { editorMessages } from "../lib/editorMessages.js";
-import { clamp, sourceToTimelineTime } from "../lib/videoTimeline.js";
+import { clamp, sourceToTimelineTime, timelineToSourceTime } from "../lib/videoTimeline.js";
+
+// Tracks the displayed video rectangle inside the preview stage.
+export default function usePreviewBounds({ stageRef, sourceUrl, width, height }) {
+  const [previewBounds, setPreviewBounds] = useState(null);
+
+  useEffect(() => {
+    if (!sourceUrl || !width || !height) {
+      setPreviewBounds(null);
+      return undefined;
+    }
+
+    function updatePreviewBounds() {
+      const stage = stageRef.current;
+      if (!stage) {
+        return;
+      }
+      const stageRect = stage.getBoundingClientRect();
+      if (!stageRect.width || !stageRect.height) {
+        return;
+      }
+      const scale = Math.min(stageRect.width / width, stageRect.height / height);
+      const previewWidth = width * scale;
+      const previewHeight = height * scale;
+      setPreviewBounds({
+        left: (stageRect.width - previewWidth) / 2,
+        top: (stageRect.height - previewHeight) / 2,
+        width: previewWidth,
+        height: previewHeight
+      });
+    }
+
+    updatePreviewBounds();
+    const stage = stageRef.current;
+    const resizeObserver = typeof ResizeObserver !== "undefined" && stage
+      ? new ResizeObserver(updatePreviewBounds)
+      : null;
+    resizeObserver?.observe(stage);
+    window.addEventListener("resize", updatePreviewBounds);
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updatePreviewBounds);
+    };
+  }, [height, sourceUrl, stageRef, width]);
+
+  return previewBounds;
+}
+
+// Synchronizes the editor playhead with the source video time.
+export function usePlayheadPreview({ videoRef, totalDuration, segments, setPlayhead }) {
+  return useCallback((nextPlayhead, timelineSegments = segments) => {
+    const safeTime = clamp(Number(nextPlayhead) || 0, 0, totalDuration);
+    setPlayhead(safeTime);
+    const video = videoRef.current;
+    if (!video) return;
+
+    const sourceTime = timelineToSourceTime(timelineSegments, safeTime);
+    if (Math.abs((Number(video.currentTime) || 0) - sourceTime) > 0.05) {
+      video.currentTime = sourceTime;
+    }
+  }, [segments, setPlayhead, totalDuration, videoRef]);
+}
 
 // Owns the preview video's playback, loading feedback, and Web Audio graph.
-export default function usePreviewPlayback({
+export function usePreviewPlayback({
   videoRef,
   sourceUrl,
   duration,

@@ -33,3 +33,39 @@ export default function useEditorHistory({ editorState, onRestore, onEmpty, onUn
 
   return { undoStack, pushUndoSnapshot, clearUndoHistory, handleUndo };
 }
+
+// Manages status and error messages with a unified API.
+export function useEditorMessages(initialStatus) {
+  const [status, setStatus] = useState(initialStatus);
+  const [errorText, setErrorText] = useState("");
+
+  function setStatusMessage(message) {
+    setStatus(message);
+  }
+
+  function setErrorMessage(message) {
+    setErrorText(message);
+  }
+
+  function clearMessages() {
+    setErrorText("");
+  }
+
+  function clearErrorOnly() {
+    setErrorText("");
+  }
+
+  function clearStatusOnly() {
+    setStatus("");
+  }
+
+  return {
+    status,
+    errorText,
+    setStatusMessage,
+    setErrorMessage,
+    clearMessages,
+    clearErrorOnly,
+    clearStatusOnly
+  };
+}

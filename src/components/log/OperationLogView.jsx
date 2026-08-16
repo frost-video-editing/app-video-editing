@@ -5,7 +5,11 @@ import React, { useMemo, useState } from "react";
  * @param {{logs: Array, onClose: Function, onClearLogs: Function}} props
  * @returns {JSX.Element}
  */
-export default function OperationLogView({ logs, onClose, onClearLogs }) {
+export default function OperationLogView({
+  logs,
+  onClose,
+  onClearLogs
+}) {
   const [sortColumn, setSortColumn] = useState("timestamp");
   const [sortDirection, setSortDirection] = useState("desc");
   const [expandedId, setExpandedId] = useState(null);

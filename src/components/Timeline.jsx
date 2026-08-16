@@ -1,4 +1,5 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { formatVideoTime, segmentDuration } from "../lib/videoTimeline.js";
 
 function formatTimeShort(seconds) {
   const total = Math.max(0, Number(seconds) || 0);
@@ -18,7 +19,7 @@ function parseTimeInput(value) {
   return null;
 }
 
-export default function TimelineVisualizer({
+function TimelineVisualizer({
   playhead = 0,
   selectionStart = 0,
   selectionEnd = 0,
@@ -64,40 +65,39 @@ export default function TimelineVisualizer({
   }, []);
 
   const pixelsPerSecond = containerWidth > 0 ? containerWidth / Math.max(totalDuration, 1) : 0;
-
   const timeToPixels = (time) => time * pixelsPerSecond;
   const pixelsToTime = (pixels) => {
     const time = pixels / pixelsPerSecond;
     return Math.max(0, Math.min(totalDuration, time));
   };
 
-  const handleMouseDown = (e, mode) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleMouseDown = (event, mode) => {
+    event.preventDefault();
+    event.stopPropagation();
     setDraggingMode(mode);
   };
 
-  const handleTrackMouseDown = (e) => {
-    e.preventDefault();
+  const handleTrackMouseDown = (event) => {
+    event.preventDefault();
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) {
       setDraggingMode("timeline");
       return;
     }
 
-    const localX = e.clientX - rect.left;
+    const localX = event.clientX - rect.left;
     const newTime = pixelsToTime(localX);
     setDraggingMode("timeline");
     onPlayheadChange(newTime);
   };
 
   useEffect(() => {
-    if (!draggingMode) return;
+    if (!draggingMode) return undefined;
 
-    const handleMouseMove = (e) => {
+    const handleMouseMove = (event) => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const localX = e.clientX - rect.left;
+      const localX = event.clientX - rect.left;
       const newTime = pixelsToTime(localX);
 
       if (draggingMode === "playhead") {
@@ -153,19 +153,16 @@ export default function TimelineVisualizer({
         onMouseDown={handleTrackMouseDown}
         style={{ cursor: draggingMode === "timeline" ? "grabbing" : "pointer" }}
       >
-        {/* Top playhead bar for time selection */}
-        <div className="timeline-playhead-bar" onMouseDown={(e) => handleMouseDown(e, "playhead")}> 
+        <div className="timeline-playhead-bar" onMouseDown={(event) => handleMouseDown(event, "playhead")}>
           <div
             className="timeline-playhead-thumb"
             style={{ left: `${(playheadPx / containerWidth) * 100}%` }}
-            onMouseDown={(e) => handleMouseDown(e, "playhead")}
+            onMouseDown={(event) => handleMouseDown(event, "playhead")}
             title={`Current: ${formatTimeShort(playhead)}`}
           />
         </div>
-        {/* Background bar */}
         <div className="timeline-background" />
 
-        {/* Segmented timeline blocks */}
         <div className="timeline-segments" aria-hidden="true">
           {safeSegments.map((segment, index) => {
             const duration = Math.max(0, Number(segment.end) - Number(segment.start));
@@ -174,9 +171,9 @@ export default function TimelineVisualizer({
             const timelineEnd = timelineStart + duration;
             const isSelected = Number(selectionStart) === timelineStart && Number(selectionEnd) === timelineEnd;
 
-            const handleSegmentClick = (e) => {
-              e.preventDefault();
-              e.stopPropagation();
+            const handleSegmentClick = (event) => {
+              event.preventDefault();
+              event.stopPropagation();
               onSelectionStartChange(timelineStart);
               onSelectionEndChange(timelineEnd);
               onPlayheadChange(timelineStart);
@@ -195,7 +192,6 @@ export default function TimelineVisualizer({
           })}
         </div>
 
-        {/* Playhead scrubber (decorative) */}
         <div
           className="timeline-scrubber"
           style={{ left: `${(playheadPx / containerWidth) * 100}%` }}
@@ -220,3 +216,84 @@ export default function TimelineVisualizer({
     </div>
   );
 }
+
+function TimelineEditor({
+  playhead,
+  selectionStart,
+  selectionEnd,
+  totalDuration,
+  segments,
+  markers,
+  onPlayheadChange,
+  onSelectionStartChange,
+  onSelectionEndChange,
+  selectedSegmentIndex,
+  onSegmentClick,
+  onMoveSegment
+}) {
+  const selectedSegment = selectedSegmentIndex === null ? null : segments[selectedSegmentIndex];
+
+  return (
+    <>
+      <TimelineVisualizer
+        playhead={playhead}
+        selectionStart={selectionStart}
+        selectionEnd={selectionEnd}
+        totalDuration={totalDuration}
+        segments={segments}
+        markers={markers}
+        onPlayheadChange={onPlayheadChange}
+        onSelectionStartChange={onSelectionStartChange}
+        onSelectionEndChange={onSelectionEndChange}
+        onSegmentClick={onSegmentClick}
+      />
+
+      {selectedSegment ? (
+        <div className="segment-reorder-actions">
+          <span>選択パーツ: {selectedSegmentIndex + 1} / {segments.length}</span>
+          <button type="button" className="ghost-button" onClick={() => onMoveSegment(selectedSegmentIndex, -1)} disabled={selectedSegmentIndex === 0}>前へ</button>
+          <button type="button" className="ghost-button" onClick={() => onMoveSegment(selectedSegmentIndex, 1)} disabled={selectedSegmentIndex === segments.length - 1}>後へ</button>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+export function TimelinePanel({ segments, isExporting, onDeleteSegment }) {
+  return (
+    <section className="side-section timeline-panel">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">Composition</p>
+          <h2>現在のタイムライン</h2>
+        </div>
+        <div className="panel-head-meta">
+          <span>順序どおりに export されます</span>
+        </div>
+      </div>
+
+      <div className="timeline-list">
+        {segments.length ? (
+          segments.map((segment, index) => {
+            const duration = segmentDuration(segment);
+            return (
+              <div className="timeline-item" key={`${segment.start}-${segment.end}-${index}`}>
+                <span className="timeline-index">{String(index + 1).padStart(2, "0")}</span>
+                <div>
+                  <strong>{formatVideoTime(segment.start)} - {formatVideoTime(segment.end)}</strong>
+                  <p>長さ {formatVideoTime(duration)}</p>
+                </div>
+                <div className="timeline-badge">{duration.toFixed(2)}s</div>
+                <button type="button" className="ghost-button timeline-item-delete" onClick={() => onDeleteSegment(index)} disabled={isExporting}>削除</button>
+              </div>
+            );
+          })
+        ) : (
+          <div className="timeline-empty">まだセグメントがありません。</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+export default TimelineEditor;

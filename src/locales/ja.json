@@ -1,0 +1,19 @@
+{
+  "chooseVideo": "動画を選択",
+  "shortcutSettings": "ショートカットキーの設定",
+  "shortcut": "ショートカット",
+  "source": "ソース",
+  "notSelected": "未選択",
+  "duration": "動画時間",
+  "resolution": "解像度",
+  "audioAdjust": "音声調整",
+  "volume": "ボリューム (%)",
+  "normalize": "正規化（簡易）",
+  "clips": "クリップ",
+  "seek": "再生位置へ",
+  "insert": "挿入",
+  "delete": "削除",
+  "copiedRange": "コピーした範囲はここに表示されます。",
+  "export": "動画出力",
+  "language": "言語"
+}

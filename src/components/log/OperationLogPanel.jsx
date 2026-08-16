@@ -7,9 +7,21 @@ import StandaloneOperationLogView from "./OperationLogView.jsx";
  * @param {{logs: Array, isOpen: boolean, onOpen: Function, onClose: Function, onClearLogs: Function}} props
  * @returns {JSX.Element}
  */
-export default function OperationLogPanel({ logs = [], isOpen, onOpen, onClose, onClearLogs }) {
+export default function OperationLogPanel({
+  logs = [],
+  isOpen,
+  onOpen,
+  onClose,
+  onClearLogs
+}) {
   if (isOpen) {
-    return <StandaloneOperationLogView logs={logs} onClose={onClose} onClearLogs={onClearLogs} />;
+    return (
+      <StandaloneOperationLogView
+        logs={logs}
+        onClose={onClose}
+        onClearLogs={onClearLogs}
+      />
+    );
   }
 
   return (
@@ -17,8 +29,7 @@ export default function OperationLogPanel({ logs = [], isOpen, onOpen, onClose, 
       type="button"
       className="secondary-button"
       onClick={onOpen}
-      disabled={logs.length === 0}
-      title={logs.length === 0 ? "操作がないため無効です" : "編集操作のログを表示"}
+      title="編集操作のログを表示・設定"
     >
       📋 ログを表示 ({logs.length})
     </button>

@@ -1,23 +1,4 @@
 import React from "react";
-import {
-  normalizeCropInput,
-  getPreviewPoint,
-  createDraftFromCropPercent,
-  updateCropDraft,
-  getDraftCropBoxStyle,
-  computeCropPercentFromDraft,
-  finalizeCropSelection
-} from "../../lib/crop.js";
-
-export {
-  normalizeCropInput,
-  getPreviewPoint,
-  createDraftFromCropPercent,
-  updateCropDraft,
-  getDraftCropBoxStyle,
-  computeCropPercentFromDraft,
-  finalizeCropSelection
-};
 
 export function CropControls({
   previewBounds,

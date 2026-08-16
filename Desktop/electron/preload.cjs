@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("editorApi", {
   probeVideo: (payload) => ipcRenderer.invoke("editor:probe-video", payload),
   selectOutput: (payload) => ipcRenderer.invoke("editor:select-output", payload),
   exportVideo: (payload) => ipcRenderer.invoke("editor:export-video", payload),
+  cancelExport: () => ipcRenderer.invoke("editor:cancel-export"),
   revealInFolder: (payload) => ipcRenderer.invoke("editor:reveal-in-folder", payload),
   onExportProgress: (callback) => {
     if (typeof callback !== "function") {

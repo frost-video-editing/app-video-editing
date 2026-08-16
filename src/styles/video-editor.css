@@ -183,6 +183,34 @@ button:disabled {
   gap: 10px;
 }
 
+.language-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card-strong);
+}
+
+.language-button {
+  min-width: 38px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.language-button:hover,
+.language-button--active {
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+}
+
 .status-strip {
   margin-top: 18px;
   padding: 14px 16px;
@@ -568,6 +596,48 @@ input[type="range"] {
   gap: 16px;
 }
 
+.export-file-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.export-file-list h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.export-file-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+}
+
+.export-file-table th,
+.export-file-table td {
+  padding: 9px 10px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+
+.export-file-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.export-file-table th:first-child {
+  width: 48px;
+}
+
+.export-file-table tbody td {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .export-confirm-actions {
   justify-content: flex-end;
 }
@@ -656,6 +726,9 @@ input[type="range"] {
   color: var(--text);
   font-weight: 600;
   white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .export-segment-progress__cell {
@@ -714,6 +787,11 @@ input[type="range"] {
 .export-progress-segment strong {
   font-family: "Space Grotesk", sans-serif;
   font-variant-numeric: tabular-nums;
+}
+
+.export-progress-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 @media (max-width: 1080px) {

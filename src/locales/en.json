@@ -1,0 +1,19 @@
+{
+  "chooseVideo": "Choose video",
+  "shortcutSettings": "Shortcut settings",
+  "shortcut": "Shortcuts",
+  "source": "Source",
+  "notSelected": "Not selected",
+  "duration": "Duration",
+  "resolution": "Resolution",
+  "audioAdjust": "Audio adjustment",
+  "volume": "Volume (%)",
+  "normalize": "Normalize (simple)",
+  "clips": "Clips",
+  "seek": "Go to position",
+  "insert": "Insert",
+  "delete": "Delete",
+  "copiedRange": "Copied ranges will appear here.",
+  "export": "Video export",
+  "language": "Language"
+}
