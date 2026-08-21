@@ -4,12 +4,18 @@ on:
   push:
     tags:
       - "v*"
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
+  build-check:
+    uses: ./.github/workflows/build-check.yml
+
   release-windows:
+    needs: build-check
     runs-on: windows-latest
 
     steps:

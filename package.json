@@ -8,6 +8,7 @@
   "scripts": {
     "react:start": "vite",
     "react:build": "vite build",
+    "ui:check": "playwright test",
     "start": "electron .",
     "dev": "concurrently \"npm run react:start\" \"wait-on tcp:5173 && electron .\"",
     "move:exe": "node --input-type=commonjs -e \"const fs=require('fs');const path=require('path');const root=process.cwd();const release=path.join(root,'release');if(!fs.existsSync(release)) process.exit(0);for(const name of ['AMM-Setup-x64.exe','AMM-Setup-ia32.exe']){const target=path.join(root,name);if(fs.existsSync(target)) fs.rmSync(target,{force:true});}const files=fs.readdirSync(release);for(const f of files){const m=f.match(/^AMM-Setup-.*-(x64|ia32)\\.exe$/i);if(m){const dest=path.join(root,'AMM-Setup-'+m[1]+'.exe');fs.copyFileSync(path.join(release,f),dest);console.log('Copied release/'+f+' -> '+path.basename(dest));}}console.log('Portable app folders are available in release/win-unpacked and release/win-ia32-unpacked');\"",
@@ -43,6 +44,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.3.3",
+    "@playwright/test": "^1.62.1",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.2.1",
     "electron": "^39.2.7",
