@@ -76,7 +76,6 @@ export function usePreviewPlayback({
   setStatus
 }) {
   const { t } = useLanguage();
-  const { t } = useLanguage();
   const [previewLoadProgress, setPreviewLoadProgress] = useState(0);
   const [previewLoadedUntil, setPreviewLoadedUntil] = useState(0);
   const [previewLoadMessage, setPreviewLoadMessage] = useState(t("notLoaded"));

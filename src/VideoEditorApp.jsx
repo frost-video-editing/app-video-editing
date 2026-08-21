@@ -30,6 +30,7 @@ import useExportDialogActions, { useExportProgress } from "./hooks/useExportDial
 import useVideoExport from "./hooks/useVideoExport.jsx";
 import useLanguage from "./hooks/useLanguage.jsx";
 import ButtonContent from "./components/button/button-content";
+import { CropControls } from "./components/button/crop.jsx";
 import { editorMessages } from "./lib/editorMessages.js";
 import {
   formatCrop,
@@ -623,6 +624,7 @@ export default function VideoEditorApp() {
             onError={handlePreviewVideoError}
             onTogglePlayback={handleTogglePreviewPlayback}
             onToggleSpeed={handleTogglePreviewSpeed}
+            showCropControls={false}
             cropControlsProps={{
               t,
               previewBounds,
@@ -727,6 +729,23 @@ export default function VideoEditorApp() {
         hasCrop={hasCrop}
         handleClearCrop={handleClearCrop}
       />
+
+      <CropControls {...{
+        previewBounds,
+        cropForm,
+        cropFormUnit,
+        setCropFormUnit,
+        handleCropFormChange,
+        applyCropFromForm,
+        isExporting,
+        presetName,
+        setPresetName,
+        handleSaveCropPreset,
+        cropPresets,
+        handleApplyCropPreset,
+        handleDeletePreset,
+        hasCrop
+      }} />
 
     </article>
       <aside className="panel card panel--side">

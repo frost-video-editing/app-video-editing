@@ -40,7 +40,8 @@ export default function CropEditor({
   onError,
   onTogglePlayback,
   onToggleSpeed,
-  cropControlsProps
+  cropControlsProps,
+  showCropControls = true
 }) {
   const { t } = useLanguage();
 
@@ -128,7 +129,7 @@ export default function CropEditor({
         </div>
       ) : null}
 
-      <CropControls {...cropControlsProps} />
+      {showCropControls ? <CropControls {...cropControlsProps} /> : null}
     </>
   );
 }
