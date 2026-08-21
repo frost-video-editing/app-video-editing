@@ -1,6 +1,6 @@
 name: Build Check
 
-on:
+"on":
   workflow_call:
   push:
     branches:
