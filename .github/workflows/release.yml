@@ -25,7 +25,7 @@ jobs:
         run: npm ci
 
       - name: Build Windows installer (x64 + x86)
-        run: npm run react:build && npx electron-builder --publish never --win nsis --x64 --ia32
+        run: npm run dist:win:all
 
       - name: Upload installers to GitHub Release
         env:
@@ -34,7 +34,7 @@ jobs:
         run: |
           $tag = "${{ github.ref_name }}"
           $x64  = Get-Item "release\VideoEditing-*-x64.exe"  | Select-Object -First 1
-          $x86 = Get-Item "release\VideoEditing-*-ia32.exe" | Select-Object -First 1
+          $x86 = Get-Item "release\VideoEditing-*-x86.exe"  | Select-Object -First 1
 
           gh release create $tag `
             --title "VideoEditing $tag" `
