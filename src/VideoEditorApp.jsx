@@ -66,6 +66,10 @@ export default function VideoEditorApp() {
   const [outputPath, setOutputPath] = useState("");
   const [isExportConfirmOpen, setIsExportConfirmOpen] = useState(false);
   const [preserveCropResolution, setPreserveCropResolution] = useState(true);
+  const [backupSourceOnImport, setBackupSourceOnImport] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("videoEditor.backupSourceOnImport") === "true";
+  });
   const [cropScaleAlgorithm, setCropScaleAlgorithm] = useState("lanczos");
   const [exportProfile, setExportProfile] = useState("standard");
 
@@ -278,6 +282,7 @@ export default function VideoEditorApp() {
     setLoadingProgress,
     setLoadingMessage,
     setLoadingIndeterminate,
+    backupSourceOnImport,
     loadStartTimeRef,
     loadCompletionTimeoutRef,
     clearLoadCompletionTimeout,
@@ -503,6 +508,8 @@ export default function VideoEditorApp() {
         onClose={() => setIsSettingsOpen(false)}
         preserveCropResolution={preserveCropResolution}
         setPreserveCropResolution={setPreserveCropResolution}
+        backupSourceOnImport={backupSourceOnImport}
+        setBackupSourceOnImport={setBackupSourceOnImport}
         cropScaleAlgorithm={cropScaleAlgorithm}
         setCropScaleAlgorithm={setCropScaleAlgorithm}
         exportProfile={exportProfile}

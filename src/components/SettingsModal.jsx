@@ -20,6 +20,8 @@ export default function SettingsModal({
   onClose,
   preserveCropResolution,
   setPreserveCropResolution,
+  backupSourceOnImport,
+  setBackupSourceOnImport,
   cropScaleAlgorithm,
   setCropScaleAlgorithm,
   exportProfile,
@@ -47,6 +49,7 @@ export default function SettingsModal({
     if (!isOpen) return;
     setDraft({
       preserveCropResolution,
+      backupSourceOnImport,
       cropScaleAlgorithm,
       exportProfile,
       audioGainPercent,
@@ -136,6 +139,8 @@ export default function SettingsModal({
     }
 
     setPreserveCropResolution(draft.preserveCropResolution);
+    setBackupSourceOnImport(draft.backupSourceOnImport);
+    window.localStorage.setItem("videoEditor.backupSourceOnImport", String(draft.backupSourceOnImport));
     setCropScaleAlgorithm(draft.cropScaleAlgorithm);
     setExportProfile(draft.exportProfile);
     setAudioGainPercent(draft.audioGainPercent);
@@ -160,66 +165,14 @@ export default function SettingsModal({
         <nav className="settings-tabs" aria-label={t("settingsCategory")}>
           <button type="button" className={activeTab === "logs" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("logs")}>{t("logSettings")}</button>
           <button type="button" className={activeTab === "shortcuts" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("shortcuts")}>{t("shortcut")}</button>
+          <button type="button" className={activeTab === "import" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("import")}>{t("importSettings")}</button>
           <button type="button" className={activeTab === "export" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("export")}>{t("exportSettings")}</button>
         </nav>
 
         <div className="settings-modal-body">
           {saveMessage && <div className={`message ${conflicts.length ? "error" : "success"}`}>{saveMessage}</div>}
 
-          {activeTab === "export" && <section className="settings-section settings-tab-panel">
-            <h3>{t("exportSettings")}</h3>
-            <label className="settings-field">
-              {t("exportProfile")}
-              <select value={draft.exportProfile} onChange={(event) => updateDraft("exportProfile", event.target.value)}>
-                <option value="fast">{t("fast")}</option>
-                <option value="standard">{t("standard")}</option>
-                <option value="high">{t("highQuality")}</option>
-                <option value="gpu">{t("gpuFirst")}</option>
-              </select>
-            </label>
-
-            <label className="settings-checkbox">
-              <input
-                type="checkbox"
-                checked={draft.preserveCropResolution}
-                onChange={(event) => updateDraft("preserveCropResolution", event.target.checked)}
-              />
-              {t("preserveResolution")}
-            </label>
-
-            {draft.preserveCropResolution && (
-              <label className="settings-field">
-                {t("scalingAlgorithm")}
-                <select value={draft.cropScaleAlgorithm} onChange={(event) => updateDraft("cropScaleAlgorithm", event.target.value)}>
-                  <option value="lanczos">{t("highQuality")} (Lanczos)</option>
-                  <option value="bilinear">{t("fast")} (Bilinear)</option>
-                </select>
-              </label>
-            )}
-
-            <label className="settings-field">
-              {t("volumeLabel")}
-              <input
-                type="range"
-                min="0"
-                max="200"
-                step="1"
-                value={draft.audioGainPercent}
-                onChange={(event) => updateDraft("audioGainPercent", Number(event.target.value))}
-              />
-              <span>{draft.audioGainPercent}%</span>
-            </label>
-
-            <label className="settings-checkbox">
-              <input
-                type="checkbox"
-                checked={draft.audioNormalize}
-                onChange={(event) => updateDraft("audioNormalize", event.target.checked)}
-              />
-              {t("normalizeAudio")}
-            </label>
-          </section>}
-
+          {/* Logs save settings on setting UI */}
           {activeTab === "logs" && <section className="settings-section settings-tab-panel">
             <h3>{t("logSettings")}</h3>
             <p className="settings-description">{t("logSettingsDescription")}</p>
@@ -237,6 +190,7 @@ export default function SettingsModal({
             </div>
           </section>}
 
+          {/* shortcut settings on setting UI */}
           {activeTab === "shortcuts" && <section className="settings-section settings-tab-panel">
             <h3>{t("shortcut")}</h3>
             <p className="settings-description">{t("shortcutDescription")}</p>
@@ -302,6 +256,74 @@ export default function SettingsModal({
             </button>
           </section>}
         </div>
+
+        {/* Import settings on setting UI */}
+        {activeTab === "import" && <section className="settings-section settings-tab-panel">
+          <h3>{t("importSettings")}</h3>
+          <label className="settings-checkbox">
+            <input
+              type="checkbox"
+              checked={draft.backupSourceOnImport}
+              onChange={(event) => updateDraft("backupSourceOnImport", event.target.checked)}
+            />
+            {t("backupSourceOnImport")}
+          </label>
+        </section>}
+
+        {/* Export settings on setting UI */}
+        {activeTab === "export" && <section className="settings-section settings-tab-panel">
+          <h3>{t("exportSettings")}</h3>
+          <label className="settings-field">
+            {t("exportProfile")}
+            <select value={draft.exportProfile} onChange={(event) => updateDraft("exportProfile", event.target.value)}>
+              <option value="fast">{t("fast")}</option>
+              <option value="standard">{t("standard")}</option>
+              <option value="high">{t("highQuality")}</option>
+              <option value="gpu">{t("gpuFirst")}</option>
+            </select>
+          </label>
+
+          <label className="settings-checkbox">
+            <input
+              type="checkbox"
+              checked={draft.preserveCropResolution}
+              onChange={(event) => updateDraft("preserveCropResolution", event.target.checked)}
+            />
+            {t("preserveResolution")}
+          </label>
+
+          {draft.preserveCropResolution && (
+            <label className="settings-field">
+              {t("scalingAlgorithm")}
+              <select value={draft.cropScaleAlgorithm} onChange={(event) => updateDraft("cropScaleAlgorithm", event.target.value)}>
+                <option value="lanczos">{t("highQuality")} (Lanczos)</option>
+                <option value="bilinear">{t("fast")} (Bilinear)</option>
+              </select>
+            </label>
+          )}
+
+          <label className="settings-field">
+            {t("volumeLabel")}
+            <input
+              type="range"
+              min="0"
+              max="200"
+              step="1"
+              value={draft.audioGainPercent}
+              onChange={(event) => updateDraft("audioGainPercent", Number(event.target.value))}
+            />
+            <span>{draft.audioGainPercent}%</span>
+          </label>
+
+          <label className="settings-checkbox">
+            <input
+              type="checkbox"
+              checked={draft.audioNormalize}
+              onChange={(event) => updateDraft("audioNormalize", event.target.checked)}
+            />
+            {t("normalizeAudio")}
+          </label>
+        </section>}
 
         <footer className="settings-modal-actions">
           <button type="button" className="ghost-button" onClick={onClose}>{t("cancel")}</button>

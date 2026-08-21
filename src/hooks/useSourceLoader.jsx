@@ -27,6 +27,7 @@ export default function useSourceLoader({
   setLoadingProgress,
   setLoadingMessage,
   setLoadingIndeterminate,
+  backupSourceOnImport = false,
   loadStartTimeRef,
   loadCompletionTimeoutRef,
   clearLoadCompletionTimeout,
@@ -121,7 +122,7 @@ export default function useSourceLoader({
         return;
       }
 
-      if (editorApi.backupSource && window.confirm(t("backupImportedFile"))) {
+      if (editorApi.backupSource && backupSourceOnImport) {
         try {
           const backup = await editorApi.backupSource(result.filePath);
           if (backup?.filePath) messages.setStatusMessage(t("backupSaved"));
@@ -138,7 +139,7 @@ export default function useSourceLoader({
       messages.setErrorMessage(error?.message || editorMessages.videoSelectionFailed);
       messages.setStatusMessage(editorMessages.loadFailed);
     }
-  }, [editorApi, loadSource, loadStartTimeRef, messages, setIsLoading, setLoadingIndeterminate, setLoadingMessage, setLoadingProgress, stopLoadingOverlay]);
+  }, [backupSourceOnImport, editorApi, loadSource, loadStartTimeRef, messages, setIsLoading, setLoadingIndeterminate, setLoadingMessage, setLoadingProgress, stopLoadingOverlay]);
 
   return { loadSource, handleChooseSource };
 }
