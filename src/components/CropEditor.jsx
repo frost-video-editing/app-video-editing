@@ -1,5 +1,6 @@
 import React from "react";
 import { CropControls } from "./button/crop.jsx";
+import useLanguage from "../hooks/useLanguage.jsx";
 
 // Renders the video preview and all crop-specific controls.
 export default function CropEditor({
@@ -41,6 +42,8 @@ export default function CropEditor({
   onToggleSpeed,
   cropControlsProps
 }) {
+  const { t } = useLanguage();
+
   return (
     <>
       <div
@@ -91,26 +94,26 @@ export default function CropEditor({
               >
                 {hasCrop && !cropDraft && currentCropBoxStyle ? (
                   <div className="preview-crop-selection" style={currentCropBoxStyle}>
-                    <span className="preview-crop-selection__label">現在の crop</span>
+                    <span className="preview-crop-selection__label">{t("currentCrop")}</span>
                   </div>
                 ) : null}
                 {cropDraft && draftCropBoxStyle ? (
                   <div className="preview-crop-selection preview-crop-selection--draft" style={draftCropBoxStyle}>
-                    <span className="preview-crop-selection__label">選択中</span>
+                    <span className="preview-crop-selection__label">{t("cropSelecting")}</span>
                   </div>
                 ) : null}
               </div>
             ) : null}
           </>
         ) : (
-          <div className="preview-empty">動画を読み込むとここにプレビューが表示されます。</div>
+          <div className="preview-empty">{t("previewEmpty")}</div>
         )}
       </div>
 
       {sourceUrl ? (
         <div className="preview-transport">
           <button type="button" className="secondary-button" onClick={onTogglePlayback} disabled={!isPreviewReady}>
-            {isPreviewPlaying ? "停止" : "再生"}
+            {isPreviewPlaying ? t("stop") : t("play")}
           </button>
           <button
             type="button"
@@ -118,10 +121,10 @@ export default function CropEditor({
             onClick={onToggleSpeed}
             disabled={!isPreviewReady}
           >
-            {previewPlaybackRate === 1 ? "低速" : "通常"}
+            {previewPlaybackRate === 1 ? t("slow") : t("normal")}
           </button>
           <span className="preview-transport__time">{previewCurrentTime} / {duration}</span>
-          <span className="preview-transport__hint">再生位置の変更は下のタイムラインで行います。</span>
+          <span className="preview-transport__hint">{t("timelineHint")}</span>
         </div>
       ) : null}
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { logError } from "../lib/logger.js";
 import { editorMessages } from "../lib/editorMessages.js";
 import { clamp, sourceToTimelineTime, timelineToSourceTime } from "../lib/videoTimeline.js";
+import useLanguage from "./useLanguage.jsx";
 
 // Tracks the displayed video rectangle inside the preview stage.
 export default function usePreviewBounds({ stageRef, sourceUrl, width, height }) {
@@ -74,9 +75,11 @@ export function usePreviewPlayback({
   setErrorText,
   setStatus
 }) {
+  const { t } = useLanguage();
+  const { t } = useLanguage();
   const [previewLoadProgress, setPreviewLoadProgress] = useState(0);
   const [previewLoadedUntil, setPreviewLoadedUntil] = useState(0);
-  const [previewLoadMessage, setPreviewLoadMessage] = useState("未読み込み");
+  const [previewLoadMessage, setPreviewLoadMessage] = useState(t("notLoaded"));
   const [isPreviewReady, setIsPreviewReady] = useState(false);
   const [previewCurrentTime, setPreviewCurrentTime] = useState(0);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
@@ -91,7 +94,7 @@ export function usePreviewPlayback({
   useEffect(() => {
     setPreviewLoadProgress(0);
     setPreviewLoadedUntil(0);
-    setPreviewLoadMessage(sourceUrl ? editorMessages.previewLoading : "未読み込み");
+    setPreviewLoadMessage(sourceUrl ? t("previewLoading") : t("notLoaded"));
     setIsPreviewReady(false);
     setPreviewCurrentTime(0);
     setIsPreviewPlaying(false);
@@ -119,17 +122,17 @@ export function usePreviewPlayback({
     setIsPreviewReady(isComplete);
     setPreviewLoadMessage(
       isComplete
-        ? editorMessages.previewReady
+        ? t("previewReady")
         : progress > 0
-          ? editorMessages.previewLoadingProgress(progress)
-          : editorMessages.previewLoading
+          ? t("previewLoadingProgress", Math.round(progress))
+          : t("previewLoading")
     );
   }
 
   function handlePreviewVideoLoadStart(event) {
     setPreviewLoadProgress(0);
     setPreviewLoadedUntil(0);
-    setPreviewLoadMessage(editorMessages.previewLoading);
+    setPreviewLoadMessage(t("previewLoading"));
     setIsPreviewReady(false);
     updatePreviewLoadState(event.currentTarget);
   }
@@ -141,13 +144,13 @@ export function usePreviewPlayback({
 
   function handlePreviewVideoWaiting(event) {
     updatePreviewLoadState(event.currentTarget);
-    setPreviewLoadMessage(editorMessages.previewLoadingMore);
+    setPreviewLoadMessage(t("previewLoadingMore"));
   }
 
   function handlePreviewVideoError() {
     setPreviewLoadProgress(0);
     setPreviewLoadedUntil(0);
-    setPreviewLoadMessage(editorMessages.previewLoadFailed);
+    setPreviewLoadMessage(t("previewLoadFailed"));
     setIsPreviewReady(false);
   }
 
@@ -176,7 +179,7 @@ export function usePreviewPlayback({
       }
     } catch (error) {
       console.error("Failed to toggle preview playback", error);
-      setErrorText(editorMessages.previewPlaybackFailed);
+      setErrorText(t("previewPlaybackFailed"));
     }
   }
 
@@ -268,7 +271,7 @@ export function usePreviewPlayback({
     if (videoRef.current) {
       videoRef.current.playbackRate = nextRate;
     }
-    setStatus(nextRate === 1 ? "プレビュー速度を通常に戻しました。" : "プレビュー速度を低速（0.5×）にしました。");
+    setStatus(nextRate === 1 ? t("previewNormalSpeed") : t("previewSlowSpeed"));
   }
 
   return {

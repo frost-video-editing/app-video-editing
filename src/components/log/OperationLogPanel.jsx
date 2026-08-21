@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import useLanguage from "../../hooks/useLanguage.jsx";
 import "../../styles/operation-log-viewer.css";
 import StandaloneOperationLogView from "./OperationLogView.jsx";
 
@@ -14,6 +15,7 @@ export default function OperationLogPanel({
   onClose,
   onClearLogs
 }) {
+  const { t } = useLanguage();
   if (isOpen) {
     return (
       <StandaloneOperationLogView
@@ -29,21 +31,22 @@ export default function OperationLogPanel({
       type="button"
       className="secondary-button"
       onClick={onOpen}
-      title="編集操作のログを表示・設定"
+      title={t("operationLogTitle")}
     >
-      📋 ログを表示 ({logs.length})
+      📋 {t("showLogs")} ({logs.length})
     </button>
   );
 }
 
 function OperationLogView({ logs, onClose, onClearLogs }) {
+  const { language, t } = useLanguage();
   const [sortColumn, setSortColumn] = useState("timestamp");
   const [sortDirection, setSortDirection] = useState("desc");
   const [expandedId, setExpandedId] = useState(null);
 
   function formatTimestamp(timestamp) {
     if (!timestamp) return "-";
-    return new Date(timestamp).toLocaleString("ja-JP", {
+    return new Date(timestamp).toLocaleString(language === "en" ? "en-US" : "ja-JP", {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -62,8 +65,8 @@ function OperationLogView({ logs, onClose, onClearLogs }) {
 
   function getOperationLabel(operationType) {
     return {
-      copy: "コピー", cut: "カット", paste: "貼る", delete: "削除", undo: "戻す",
-      crop: "crop", export: "出力", load: "読み込み"
+      copy: t("copy"), cut: t("cut"), paste: t("paste"), delete: t("delete"), undo: t("undoAction"),
+      crop: t("crop"), export: t("output"), load: t("loadVideo")
     }[operationType] || operationType;
   }
 
@@ -98,29 +101,29 @@ function OperationLogView({ logs, onClose, onClearLogs }) {
         <div className="hero-head">
           <div>
             <p className="eyebrow">Operation History</p>
-            <h1>編集操作ログ</h1>
-            <p>実行された動画編集操作の履歴</p>
+            <h1>{t("operationLog")}</h1>
+            <p>{t("operationLogDescription")}</p>
           </div>
           <div className="hero-actions" style={{ marginRight: 12 }}>
-            <button type="button" className="ghost-button" onClick={onClose}>戻る</button>
+            <button type="button" className="ghost-button" onClick={onClose}>{t("back")}</button>
             {logs.length > 0 && (
               <button
                 type="button"
                 className="danger-button"
                 onClick={() => {
-                  if (window.confirm("すべてのログを削除しますか？")) onClearLogs();
+                  if (window.confirm(t("clearLogsConfirm"))) onClearLogs();
                 }}
               >
-                ログをクリア
+                {t("clearLogs")}
               </button>
             )}
           </div>
         </div>
         <div className="status-strip">
-          <div><span>合計操作数</span><strong>{logs.length}</strong></div>
+          <div><span>{t("totalOperations")}</span><strong>{logs.length}</strong></div>
           {logs.length > 0 && <>
-            <div><span>最初の操作</span><strong>{formatTimestamp(logs[0]?.timestamp)}</strong></div>
-            <div><span>最後の操作</span><strong>{formatTimestamp(logs[logs.length - 1]?.timestamp)}</strong></div>
+            <div><span>{t("firstOperation")}</span><strong>{formatTimestamp(logs[0]?.timestamp)}</strong></div>
+            <div><span>{t("lastOperation")}</span><strong>{formatTimestamp(logs[logs.length - 1]?.timestamp)}</strong></div>
           </>}
         </div>
       </section>
@@ -129,17 +132,17 @@ function OperationLogView({ logs, onClose, onClearLogs }) {
         {logs.length === 0 ? (
           <div className="log-empty-state">
             <p className="eyebrow">📝</p>
-            <h2>操作ログがありません</h2>
-            <p>動画編集操作を実行するとここに記録されます。</p>
+            <h2>{t("noOperationLogs")}</h2>
+            <p>{t("operationLogEmptyDescription")}</p>
           </div>
         ) : (
           <div className="log-table-wrapper">
             <table className="log-table">
               <thead><tr>
                 <th className="col-number">#</th>
-                <th className="col-operation"><button className="sort-button" onClick={() => handleSort("operation")}>操作{sortIndicator("operation")}</button></th>
-                <th className="col-timestamp"><button className="sort-button" onClick={() => handleSort("timestamp")}>タイムスタンプ{sortIndicator("timestamp")}</button></th>
-                <th className="col-details">詳細</th>
+                <th className="col-operation"><button className="sort-button" onClick={() => handleSort("operation")}>{t("operation")}{sortIndicator("operation")}</button></th>
+                <th className="col-timestamp"><button className="sort-button" onClick={() => handleSort("timestamp")}>{t("timestamp")}{sortIndicator("timestamp")}</button></th>
+                <th className="col-details">{t("details")}</th>
               </tr></thead>
               <tbody>
                 {sortedLogs.map((log) => (

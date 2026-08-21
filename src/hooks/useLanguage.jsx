@@ -16,7 +16,10 @@ export default function useLanguage() {
     document.documentElement.lang = language;
   }, [language]);
 
-  const t = (key) => translations[language][key] || translations.ja[key] || key;
+  const t = (key, ...values) => {
+    const template = translations[language][key] || translations.ja[key] || key;
+    return values.reduce((result, value, index) => result.replaceAll(`{${index}}`, String(value)), template);
+  };
 
   return { language, setLanguage, t };
 }

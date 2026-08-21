@@ -433,8 +433,8 @@ export default function VideoEditorApp() {
       <main className="editor-shell editor-shell--no-api">
         <section className="hero card">
           <p className="eyebrow">Video Editing</p>
-          <h1>Electron で起動してください</h1>
-          <p>このアプリはローカルの FFmpeg 実行を使うため、ブラウザ単体では動きません。</p>
+          <h1>{t("startElectron")}</h1>
+          <p>{t("electronOnly")}</p>
         </section>
       </main>
     );
@@ -474,7 +474,7 @@ export default function VideoEditorApp() {
           onExport: handleExport
         }}
         progressProps={{
-          message: exportMessage || "動画を出力中...",
+          message: exportMessage || t("exporting"),
           progress: exportProgress,
           indeterminate: exportIndeterminate,
           segments: exportSegments,
@@ -497,6 +497,7 @@ export default function VideoEditorApp() {
         startTime={loadStartTimeRef.current}
       />
       <SettingsModal
+        t={t}
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         preserveCropResolution={preserveCropResolution}
@@ -552,9 +553,9 @@ export default function VideoEditorApp() {
               type="button" 
               className="ghost-button" 
               onClick={() => setIsSettingsOpen(true)}
-              title="設定を開く"
+              title={t("openSettings")}
             >
-              ⚙️ 設定
+              ⚙️ {t("settings")}
             </button>
           </div>
         </div>
@@ -580,7 +581,7 @@ export default function VideoEditorApp() {
           <div className="panel-head">
             <div>
               <p className="eyebrow">
-                <h2>Preview</h2>
+                <h2>{t("preview")}</h2>
               </p>
             </div>
           </div>
@@ -623,6 +624,7 @@ export default function VideoEditorApp() {
             onTogglePlayback={handleTogglePreviewPlayback}
             onToggleSpeed={handleTogglePreviewSpeed}
             cropControlsProps={{
+              t,
               previewBounds,
               cropForm,
               cropFormUnit,
@@ -641,6 +643,7 @@ export default function VideoEditorApp() {
           />
 
           <TimelineEditor
+            t={t}
             playhead={playhead}
             selectionStart={selectedRange.start}
             selectionEnd={selectedRange.end}
@@ -705,6 +708,7 @@ export default function VideoEditorApp() {
       </div>
         
       <ButtonContent
+        t={t}
         handleCopy={handleCopy}
         handleCut={handleCut}
         handleDelete={handleDelete}
@@ -727,6 +731,7 @@ export default function VideoEditorApp() {
     </article>
       <aside className="panel card panel--side">
           <TimelinePanel
+            t={t}
             segments={segments}
             isExporting={isExporting}
             onDeleteSegment={handleDeleteSegment}
@@ -736,12 +741,12 @@ export default function VideoEditorApp() {
             <div>
               <p className="eyebrow">Export</p>
               <h2>{t("export")}</h2>
-              <p className="subtle">右側のボタンから出力確認を開きます。</p>
+              <p className="subtle">{t("exportHint")}</p>
             </div>
 
             <div className="action-row export-actions">
               <button type="button" onClick={handleOpenExportConfirm} disabled={isExporting || !segments.length || !sourcePath}>
-                {isExporting ? "出力中..." : "動画出力"}
+                {isExporting ? t("exporting") : t("export")}
               </button>
             </div>
 

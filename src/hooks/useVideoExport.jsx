@@ -3,6 +3,7 @@ import { segmentDuration } from "../lib/videoTimeline.js";
 import { normalizeCropInput } from "../lib/crop.js";
 import { createExportLog } from "../lib/operationLog.js";
 import { editorMessages } from "../lib/editorMessages.js";
+import useLanguage from "./useLanguage.jsx";
 
 // Owns the Electron export request, progress initialization, and export notices.
 export default function useVideoExport({
@@ -30,6 +31,7 @@ export default function useVideoExport({
   isOperationTypeEnabled = () => true,
   messages
 }) {
+  const { t } = useLanguage();
   return useCallback(async () => {
     if (!editorApi) {
       messages.setErrorMessage(editorMessages.runOnElectron);
@@ -42,7 +44,7 @@ export default function useVideoExport({
 
     const safeSegments = segments.filter((segment) => segmentDuration(segment) > 0);
     if (!safeSegments.length) {
-      messages.setErrorMessage("出力できるセグメントがありません。");
+      messages.setErrorMessage(t("noExportSegments"));
       return;
     }
 
@@ -53,11 +55,11 @@ export default function useVideoExport({
     setIsExporting(true);
     setIsExportConfirmOpen(false);
     setExportProgress(0);
-    setExportMessage("出力準備中...");
+    setExportMessage(t("exportPreparing"));
     setExportIndeterminate(true);
     exportStartTimeRef.current = Date.now();
     messages.clearErrorOnly();
-    messages.setStatusMessage("動画を出力中...");
+    messages.setStatusMessage(t("exporting"));
 
     try {
       const normalizedCrop = normalizeCropInput(crop);
@@ -73,7 +75,7 @@ export default function useVideoExport({
         audioNormalize: Boolean(audioNormalize)
       });
       const outputPaths = Array.isArray(result?.outputPaths) && result.outputPaths.length ? result.outputPaths : [chosenOutput];
-      messages.setStatusMessage(`${outputPaths.length} 個のファイルを出力しました。`);
+      messages.setStatusMessage(t("exportComplete", outputPaths.length));
       if (isOperationTypeEnabled("export")) {
         setOperationLogs((current) => [...current, createExportLog(sourceName, chosenOutput, safeSegments.length, metadata, {
           crop: normalizedCrop,
@@ -84,10 +86,10 @@ export default function useVideoExport({
       await editorApi.revealInFolder(outputPaths[0]);
     } catch (error) {
       if (error?.code === "EXPORT_CANCELLED" || error?.message === "EXPORT_CANCELLED") {
-        messages.setStatusMessage("動画の出力をキャンセルしました。");
+        messages.setStatusMessage(t("exportCancelled"));
       } else {
         messages.setErrorMessage(error?.message || editorMessages.exportFailed);
-        messages.setStatusMessage("エラー: 動画の出力に失敗しました。");
+        messages.setStatusMessage(t("exportFailedStatus"));
       }
     } finally {
       setIsExporting(false);

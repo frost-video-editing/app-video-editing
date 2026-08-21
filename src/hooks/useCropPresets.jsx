@@ -7,6 +7,7 @@ import {
   getPreviewPoint as getCropPreviewPoint,
   updateCropDraft
 } from "../lib/crop.js";
+import useLanguage from "./useLanguage.jsx";
 
 const STORAGE_KEY = "videoEditor.cropPresets";
 
@@ -23,6 +24,7 @@ export default function useCropPresets({
   presetName,
   setPresetName
 }) {
+  const { t } = useLanguage();
   const [cropForm, setCropForm] = useState({ left: 0, top: 0, width: 100, height: 100 });
   const [cropPresets, setCropPresets] = useState([]);
 
@@ -73,7 +75,7 @@ export default function useCropPresets({
 
   function applyCropFromForm() {
     if (!previewBounds) {
-      messages.setErrorMessage("プレビューの準備ができていません。");
+      messages.setErrorMessage(t("previewNotReady"));
       return;
     }
 
@@ -105,18 +107,18 @@ export default function useCropPresets({
       bottom: Math.max(0, 100 - topPct - heightPct)
     }));
     setIsCropPreviewLocked(true);
-    messages.setStatusMessage("crop 範囲を適用しました。");
+    messages.setStatusMessage(t("cropApplied"));
   }
 
   function handleSaveCropPreset() {
     if (!hasCrop) {
-      messages.setErrorMessage("先に crop 範囲を指定してください。");
+      messages.setErrorMessage(t("cropRequired"));
       return;
     }
     const name = (presetName || `preset-${new Date().toISOString()}`).trim();
     setCropPresets((current) => [{ id: Date.now(), name, crop: normalizeCropInput(crop) }, ...current].slice(0, 50));
     setPresetName("");
-    messages.setStatusMessage(`crop プリセット「${name}」を保存しました。`);
+    messages.setStatusMessage(t("cropPresetSaved", name));
     messages.clearErrorOnly();
   }
 
@@ -125,12 +127,12 @@ export default function useCropPresets({
     pushUndoSnapshot();
     setCrop({ ...preset.crop });
     setIsCropPreviewLocked(true);
-    messages.setStatusMessage(`crop プリセット「${preset.name}」を適用しました。`);
+    messages.setStatusMessage(t("cropPresetApplied", preset.name));
   }
 
   function handleDeletePreset(id) {
     setCropPresets((current) => current.filter((preset) => preset.id !== id));
-    messages.setStatusMessage("crop プリセットを削除しました。");
+    messages.setStatusMessage(t("cropPresetDeleted"));
   }
 
   return {
@@ -155,16 +157,17 @@ export function useCropActions({
   resetCropSelection,
   messages
 }) {
+  const { t } = useLanguage();
   function handleToggleCropPreviewLock() {
     if (!hasCrop) {
-      messages.setErrorMessage("先に crop 範囲を指定してください。");
+      messages.setErrorMessage(t("cropRequired"));
       return;
     }
 
     const nextLocked = !isCropPreviewLocked;
     setIsCropPreviewLocked(nextLocked);
     messages.clearErrorOnly();
-    messages.setStatusMessage(nextLocked ? "crop 範囲だけをプレビューに固定しました。" : "プレビュー全体の表示に戻しました。");
+    messages.setStatusMessage(nextLocked ? t("cropLocked") : t("previewRestored"));
   }
 
   function handleClearCrop() {
@@ -173,7 +176,7 @@ export function useCropActions({
     setIsCropPreviewLocked(false);
     resetCropSelection();
     messages.clearErrorOnly();
-    messages.setStatusMessage("crop を解除しました。");
+    messages.setStatusMessage(t("cropCleared"));
   }
 
   return { handleToggleCropPreviewLock, handleClearCrop };
@@ -191,6 +194,7 @@ export function useCropSelection({
   pushUndoSnapshot,
   onCropConfirmed
 }) {
+  const { t } = useLanguage();
   const [isCropSelecting, setIsCropSelecting] = useState(false);
   const [cropDraft, setCropDraft] = useState(null);
   const [cropInteraction, setCropInteraction] = useState(null);
@@ -217,7 +221,7 @@ export function useCropSelection({
       setCropDraft(null);
     }
     setIsCropSelecting(true);
-    messages.setStatusMessage("プレビュー上で crop 範囲をドラッグしてください。");
+    messages.setStatusMessage(t("cropInstruction"));
   }
 
   function handlePreviewPointerDown(event) {
@@ -270,7 +274,7 @@ export function useCropSelection({
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     const nextCrop = finalizeCropSelection(cropDraft, previewBounds, cropInteraction?.mode !== "new" && hasCrop ? crop : null);
     if (!nextCrop) {
-      messages.setStatusMessage("crop 範囲をもう一度選択してください。");
+      messages.setStatusMessage(t("cropSelectAgain"));
       setCropDraft(null);
       setCropInteraction(null);
       return;
@@ -282,7 +286,7 @@ export function useCropSelection({
     setIsCropPreviewLocked(true);
     setCropInteraction(null);
     messages.clearErrorOnly();
-    messages.setStatusMessage("crop 範囲を更新しました。");
+    messages.setStatusMessage(t("cropUpdated"));
     onCropConfirmed?.(nextCrop);
   }
 

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import useLanguage from "../../hooks/useLanguage.jsx";
 
 /**
  * Renders the full operation history screen.
@@ -10,6 +11,7 @@ export default function OperationLogView({
   onClose,
   onClearLogs
 }) {
+  const { language, t } = useLanguage();
   const [sortColumn, setSortColumn] = useState("timestamp");
   const [sortDirection, setSortDirection] = useState("desc");
   const [expandedId, setExpandedId] = useState(null);
@@ -19,7 +21,7 @@ export default function OperationLogView({
 
   function formatTimestamp(timestamp) {
     if (!timestamp) return "-";
-    return new Date(timestamp).toLocaleString("ja-JP", {
+    return new Date(timestamp).toLocaleString(language === "en" ? "en-US" : "ja-JP", {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -38,8 +40,8 @@ export default function OperationLogView({
 
   function getOperationLabel(operationType) {
     return {
-      copy: "コピー", cut: "カット", paste: "貼る", delete: "削除", undo: "戻す",
-      crop: "crop", export: "出力", load: "読み込み"
+      copy: t("copy"), cut: t("cut"), paste: t("paste"), delete: t("delete"), undo: t("undoAction"),
+      crop: t("crop"), export: t("output"), load: t("loadVideo")
     }[operationType] || operationType;
   }
 
@@ -86,47 +88,47 @@ export default function OperationLogView({
         <div className="hero-head">
           <div>
             <p className="eyebrow">Operation History</p>
-            <h1>編集操作ログ</h1>
-            <p>実行された動画編集操作の履歴</p>
+            <h1>{t("operationLog")}</h1>
+            <p>{t("operationLogDescription")}</p>
           </div>
           <div className="hero-actions" style={{ marginRight: 12 }}>
-            <button type="button" className="ghost-button" onClick={onClose}>戻る</button>
+            <button type="button" className="ghost-button" onClick={onClose}>{t("back")}</button>
             {logs.length > 0 && (
               <button
                 type="button"
                 className="danger-button"
                 onClick={() => {
-                  if (window.confirm("すべてのログを削除しますか？")) onClearLogs();
+                  if (window.confirm(t("clearLogsConfirm"))) onClearLogs();
                 }}
               >
-                ログをクリア
+                {t("clearLogs")}
               </button>
             )}
           </div>
         </div>
         <div className="status-strip">
-          <div><span>表示件数 / 合計</span><strong>{filteredLogs.length} / {logs.length}</strong></div>
+          <div><span>{t("shownAndTotal")}</span><strong>{filteredLogs.length} / {logs.length}</strong></div>
           {filteredLogs.length > 0 && <>
-            <div><span>最初の操作</span><strong>{formatTimestamp(filteredLogs[0]?.timestamp)}</strong></div>
-            <div><span>最後の操作</span><strong>{formatTimestamp(filteredLogs[filteredLogs.length - 1]?.timestamp)}</strong></div>
+            <div><span>{t("firstOperation")}</span><strong>{formatTimestamp(filteredLogs[0]?.timestamp)}</strong></div>
+            <div><span>{t("lastOperation")}</span><strong>{formatTimestamp(filteredLogs[filteredLogs.length - 1]?.timestamp)}</strong></div>
           </>}
         </div>
       </section>
 
       <section className="log-viewer-section card">
         {logs.length > 0 && (
-          <div className="log-filters" aria-label="ログフィルター">
-            <label>操作種類
+          <div className="log-filters" aria-label={t("logFilters")}>
+            <label>{t("operationType")}
               <select value={operationFilter} onChange={(event) => setOperationFilter(event.target.value)}>
-                <option value="all">すべて</option>
+                <option value="all">{t("all")}</option>
                 {operationTypes.map((type) => <option key={type} value={type}>{getOperationLabel(type)}</option>)}
               </select>
             </label>
-            <label>開始日<input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} /></label>
-            <label>終了日<input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} /></label>
+            <label>{t("startDate")}<input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} /></label>
+            <label>{t("endDate")}<input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} /></label>
             {(operationFilter !== "all" || fromDate || toDate) && (
               <button type="button" className="ghost-button" onClick={() => { setOperationFilter("all"); setFromDate(""); setToDate(""); }}>
-                フィルターをリセット
+                {t("resetFilters")}
               </button>
             )}
           </div>
@@ -134,19 +136,19 @@ export default function OperationLogView({
         {logs.length === 0 ? (
           <div className="log-empty-state">
             <p className="eyebrow">📝</p>
-            <h2>操作ログがありません</h2>
-            <p>動画編集操作を実行するとここに記録されます。</p>
+            <h2>{t("noOperationLogs")}</h2>
+            <p>{t("operationLogEmptyDescription")}</p>
           </div>
         ) : sortedLogs.length === 0 ? (
-          <div className="log-empty-state"><h2>条件に一致するログがありません</h2><p>フィルター条件を変更してください。</p></div>
+          <div className="log-empty-state"><h2>{t("noMatchingLogs")}</h2><p>{t("changeFilterConditions")}</p></div>
         ) : (
           <div className="log-table-wrapper">
             <table className="log-table">
               <thead><tr>
                 <th className="col-number">#</th>
-                <th className="col-operation"><button className="sort-button" onClick={() => handleSort("operation")}>操作{sortIndicator("operation")}</button></th>
-                <th className="col-timestamp"><button className="sort-button" onClick={() => handleSort("timestamp")}>タイムスタンプ{sortIndicator("timestamp")}</button></th>
-                <th className="col-details">詳細</th>
+                <th className="col-operation"><button className="sort-button" onClick={() => handleSort("operation")}>{t("operation")}{sortIndicator("operation")}</button></th>
+                <th className="col-timestamp"><button className="sort-button" onClick={() => handleSort("timestamp")}>{t("timestamp")}{sortIndicator("timestamp")}</button></th>
+                <th className="col-details">{t("details")}</th>
               </tr></thead>
               <tbody>
                 {sortedLogs.map((log) => (

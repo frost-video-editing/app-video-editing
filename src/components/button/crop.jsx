@@ -1,4 +1,5 @@
 import React from "react";
+import useLanguage from "../../hooks/useLanguage.jsx";
 
 export function CropControls({
   previewBounds,
@@ -16,11 +17,12 @@ export function CropControls({
   handleDeletePreset,
   hasCrop
 }) {
+  const { t } = useLanguage();
   return (
     <div className="preview-crop-coords">
       {previewBounds ? (
         <div className="crop-form">
-          <strong>数値で指定</strong>
+          <strong>{t("numericCrop")}</strong>
           <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "flex-end" }}>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -48,7 +50,7 @@ export function CropControls({
               <input type="number" value={cropForm.height} onChange={(e) => handleCropFormChange("height", e.target.value)} style={{ width: 80 }} />
             </label>
             <div style={{ display: "flex", alignItems: "flex-end" }}>
-              <button type="button" className="secondary-button" onClick={applyCropFromForm} disabled={isExporting}>適用</button>
+              <button type="button" className="secondary-button" onClick={applyCropFromForm} disabled={isExporting}>{t("apply")}</button>
             </div>
           </div>
         </div>
@@ -57,19 +59,19 @@ export function CropControls({
       <div style={{ marginTop: 8, marginBottom: 8 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input placeholder="preset name" value={presetName} onChange={(e) => setPresetName(e.target.value)} style={{ flex: 1 }} />
-          <button type="button" className="secondary-button" onClick={handleSaveCropPreset} disabled={!hasCrop}>保存</button>
+          <button type="button" className="secondary-button" onClick={handleSaveCropPreset} disabled={!hasCrop}>{t("save")}</button>
         </div>
 
         {cropPresets.length ? (
           <div style={{ marginTop: 8 }}>
-            <strong>保存済み presets</strong>
+            <strong>{t("savedPresets")}</strong>
             <ul style={{ listStyle: "none", padding: 0, margin: "6px 0 0 0" }}>
               {cropPresets.map((p) => (
                 <li key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <div style={{ flex: 1 }}>{p.name}</div>
                   <div style={{ color: "#666", fontSize: 12 }}>{(p.crop && p.crop.left != null) ? `${p.crop.left.toFixed(2)}% / ${p.crop.top.toFixed(2)}%` : "-"}</div>
-                  <button type="button" className="ghost-button" onClick={() => handleApplyCropPreset(p)}>適用</button>
-                  <button type="button" className="timeline-item-delete" onClick={() => handleDeletePreset(p.id)}>削除</button>
+                  <button type="button" className="ghost-button" onClick={() => handleApplyCropPreset(p)}>{t("apply")}</button>
+                  <button type="button" className="timeline-item-delete" onClick={() => handleDeletePreset(p.id)}>{t("delete")}</button>
                 </li>
               ))}
             </ul>

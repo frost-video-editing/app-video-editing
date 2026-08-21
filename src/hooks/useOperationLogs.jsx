@@ -9,6 +9,7 @@ import {
   createExportLog,
   createLoadLog
 } from "../lib/operationLog.js";
+import useLanguage from "./useLanguage.jsx";
 
 const STORAGE_KEY = "videoEditor.operationLogs";
 const LOG_SETTINGS_STORAGE_KEY = "videoEditor.operationLogSettings";
@@ -17,6 +18,7 @@ export const OPERATION_TYPES = ["copy", "cut", "paste", "delete", "undo", "crop"
 
 // Owns operation log persistence so the editor only manages log events.
 export default function useOperationLogs() {
+  const { t } = useLanguage();
   const [operationLogs, setOperationLogs] = useState(() => {
     try {
       const savedLogs = typeof window !== "undefined"
@@ -25,7 +27,7 @@ export default function useOperationLogs() {
       const parsedLogs = savedLogs ? JSON.parse(savedLogs) : [];
       return Array.isArray(parsedLogs) ? parsedLogs : [];
     } catch (error) {
-      console.error("Failed to restore operation logs", error);
+      console.error(t("restoreOperationLogsFailed"), error);
       return [];
     }
   });
@@ -39,7 +41,7 @@ export default function useOperationLogs() {
         ? parsedSettings.excludedOperationTypes.filter((type) => OPERATION_TYPES.includes(type))
         : [];
     } catch (error) {
-      console.error("Failed to restore operation log settings", error);
+      console.error(t("restoreOperationLogSettingsFailed"), error);
       return [];
     }
   });
@@ -48,7 +50,7 @@ export default function useOperationLogs() {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(operationLogs.slice(-MAX_LOGS)));
     } catch (error) {
-      console.error("Failed to persist operation logs", error);
+      console.error(t("persistOperationLogsFailed"), error);
     }
   }, [operationLogs]);
 
@@ -59,7 +61,7 @@ export default function useOperationLogs() {
         JSON.stringify({ excludedOperationTypes })
       );
     } catch (error) {
-      console.error("Failed to persist operation log settings", error);
+      console.error(t("persistOperationLogSettingsFailed"), error);
     }
   }, [excludedOperationTypes]);
 
@@ -68,9 +70,9 @@ export default function useOperationLogs() {
     try {
       window.localStorage.removeItem(STORAGE_KEY);
     } catch (error) {
-      console.error("Failed to clear operation logs", error);
+      console.error(t("clearOperationLogsFailed"), error);
     }
-  }, []);
+  }, [t]);
 
   const isOperationTypeEnabled = useCallback(
     (operationType) => !excludedOperationTypes.includes(operationType),

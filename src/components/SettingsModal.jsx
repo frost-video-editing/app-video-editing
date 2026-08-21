@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import useLanguage from "../hooks/useLanguage.jsx";
 import { OPERATION_TYPES } from "../hooks/useOperationLogs.jsx";
 import {
   detectKeyConflicts,
@@ -13,17 +14,6 @@ import {
 } from "../lib/shortcutManager.js";
 import "../styles/settings-modal.css";
 import "../styles/shortcut-settings-modal.css";
-
-const OPERATION_LABELS = {
-  copy: "コピー",
-  cut: "カット",
-  paste: "貼り付け",
-  delete: "削除",
-  undo: "元に戻す",
-  crop: "Crop",
-  export: "動画出力",
-  load: "動画読み込み"
-};
 
 export default function SettingsModal({
   isOpen,
@@ -41,6 +31,11 @@ export default function SettingsModal({
   excludedOperationTypes,
   setExcludedOperationTypes
 }) {
+  const { t } = useLanguage();
+  const operationLabels = {
+    copy: t("copy"), cut: t("cut"), paste: t("paste"), delete: t("delete"),
+    undo: t("undoAction"), crop: t("crop"), export: t("export"), load: t("loadVideo")
+  };
   const [draft, setDraft] = useState(null);
   const [shortcuts, setShortcuts] = useState({});
   const [editingKey, setEditingKey] = useState(null);
@@ -100,7 +95,7 @@ export default function SettingsModal({
   const handleKeyDown = (event, shortcutName) => {
     event.preventDefault();
     if (!isValidKeyPress(event)) {
-      setSaveMessage("モディファイアキーのみは登録できません");
+      setSaveMessage(t("modifierOnly"));
       return;
     }
 
@@ -124,19 +119,19 @@ export default function SettingsModal({
   };
 
   const handleResetShortcuts = () => {
-    if (!window.confirm("すべてのショートカットをデフォルトに戻しますか？")) return;
+    if (!window.confirm(t("resetShortcutsConfirm"))) return;
     setShortcuts(getDefaultShortcuts());
     setEditingKey(null);
   };
 
   const handleSave = () => {
     if (conflicts.length > 0) {
-      setSaveMessage("ショートカットキーの重複を解決してから保存してください。");
+      setSaveMessage(t("resolveShortcutConflicts"));
       return;
     }
 
     if (!saveShortcuts(shortcuts)) {
-      setSaveMessage("ショートカット設定の保存に失敗しました。");
+      setSaveMessage(t("shortcutSaveFailed"));
       return;
     }
 
@@ -156,30 +151,30 @@ export default function SettingsModal({
       <div className="settings-modal-content" onClick={(event) => event.stopPropagation()}>
         <header className="settings-modal-header">
           <div>
-            <p className="eyebrow">Application Settings</p>
-            <h2>設定</h2>
+            <p className="eyebrow">{t("settings")}</p>
+            <h2>{t("settings")}</h2>
           </div>
-          <button type="button" className="close-button" onClick={onClose} aria-label="設定を閉じる">✕</button>
+          <button type="button" className="close-button" onClick={onClose} aria-label={t("closeSettings")}>✕</button>
         </header>
 
-        <nav className="settings-tabs" aria-label="設定カテゴリー">
-          <button type="button" className={activeTab === "logs" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("logs")}>記録ログ設定</button>
-          <button type="button" className={activeTab === "shortcuts" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("shortcuts")}>ショートカットキー</button>
-          <button type="button" className={activeTab === "export" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("export")}>動画出力設定</button>
+        <nav className="settings-tabs" aria-label={t("settingsCategory")}>
+          <button type="button" className={activeTab === "logs" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("logs")}>{t("logSettings")}</button>
+          <button type="button" className={activeTab === "shortcuts" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("shortcuts")}>{t("shortcut")}</button>
+          <button type="button" className={activeTab === "export" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("export")}>{t("exportSettings")}</button>
         </nav>
 
         <div className="settings-modal-body">
           {saveMessage && <div className={`message ${conflicts.length ? "error" : "success"}`}>{saveMessage}</div>}
 
           {activeTab === "export" && <section className="settings-section settings-tab-panel">
-            <h3>動画出力設定</h3>
+            <h3>{t("exportSettings")}</h3>
             <label className="settings-field">
-              出力プロファイル
+              {t("exportProfile")}
               <select value={draft.exportProfile} onChange={(event) => updateDraft("exportProfile", event.target.value)}>
-                <option value="fast">高速</option>
-                <option value="standard">標準</option>
-                <option value="high">高品質</option>
-                <option value="gpu">GPU優先</option>
+                <option value="fast">{t("fast")}</option>
+                <option value="standard">{t("standard")}</option>
+                <option value="high">{t("highQuality")}</option>
+                <option value="gpu">{t("gpuFirst")}</option>
               </select>
             </label>
 
@@ -189,21 +184,21 @@ export default function SettingsModal({
                 checked={draft.preserveCropResolution}
                 onChange={(event) => updateDraft("preserveCropResolution", event.target.checked)}
               />
-              Crop後も元の解像度を維持する
+              {t("preserveResolution")}
             </label>
 
             {draft.preserveCropResolution && (
               <label className="settings-field">
-                拡大補間
+                {t("scalingAlgorithm")}
                 <select value={draft.cropScaleAlgorithm} onChange={(event) => updateDraft("cropScaleAlgorithm", event.target.value)}>
-                  <option value="lanczos">高品質 (Lanczos)</option>
-                  <option value="bilinear">高速 (Bilinear)</option>
+                  <option value="lanczos">{t("highQuality")} (Lanczos)</option>
+                  <option value="bilinear">{t("fast")} (Bilinear)</option>
                 </select>
               </label>
             )}
 
             <label className="settings-field">
-              音量
+              {t("volumeLabel")}
               <input
                 type="range"
                 min="0"
@@ -221,13 +216,13 @@ export default function SettingsModal({
                 checked={draft.audioNormalize}
                 onChange={(event) => updateDraft("audioNormalize", event.target.checked)}
               />
-              音声を正規化する
+              {t("normalizeAudio")}
             </label>
           </section>}
 
           {activeTab === "logs" && <section className="settings-section settings-tab-panel">
-            <h3>記録ログ設定</h3>
-            <p className="settings-description">チェックを外した操作は新しく記録されません。</p>
+            <h3>{t("logSettings")}</h3>
+            <p className="settings-description">{t("logSettingsDescription")}</p>
             <div className="settings-log-options">
               {OPERATION_TYPES.map((operationType) => (
                 <label className="settings-checkbox" key={operationType}>
@@ -236,18 +231,18 @@ export default function SettingsModal({
                     checked={!draft.excludedOperationTypes.includes(operationType)}
                     onChange={() => toggleOperationType(operationType)}
                   />
-                  {OPERATION_LABELS[operationType]}を記録する
+                  {operationLabels[operationType]}{t("recordAction")}
                 </label>
               ))}
             </div>
           </section>}
 
           {activeTab === "shortcuts" && <section className="settings-section settings-tab-panel">
-            <h3>ショートカットキー</h3>
-            <p className="settings-description">変更を選択してから、割り当てたいキーを押してください。</p>
+            <h3>{t("shortcut")}</h3>
+            <p className="settings-description">{t("shortcutDescription")}</p>
             {conflicts.length > 0 && (
               <div className="conflict-warning">
-                <strong>ショートカットキーの重複があります。</strong>
+                <strong>{t("shortcutConflict")}</strong>
                 <ul>
                   {conflicts.map((conflict) => (
                     <li key={conflict.key}>
@@ -261,8 +256,8 @@ export default function SettingsModal({
               <table className="shortcut-table">
                 <thead>
                   <tr>
-                    <th>機能</th>
-                    <th>現在のキー</th>
+                    <th>{t("function")}</th>
+                    <th>{t("currentKey")}</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -275,14 +270,14 @@ export default function SettingsModal({
                       <tr key={name} className={`shortcut-row ${hasConflict ? "has-conflict" : ""}`}>
                         <td className="shortcut-name">
                           <span>{getShortcutDescription(name)}</span>
-                          {hasConflict && <span className="conflict-badge">重複</span>}
+                          {hasConflict && <span className="conflict-badge">{t("duplicate")}</span>}
                         </td>
                         <td className="shortcut-key">
                           {isEditing ? (
                             <input
                               type="text"
                               className="key-input"
-                              placeholder="キーを押してください..."
+                              placeholder={t("pressKey")}
                               onKeyDown={(event) => handleKeyDown(event, name)}
                               autoFocus
                             />
@@ -290,10 +285,10 @@ export default function SettingsModal({
                         </td>
                         <td className="shortcut-actions">
                           <button type="button" className={`edit-button ${isEditing ? "active" : ""}`} onClick={() => setEditingKey(isEditing ? null : name)}>
-                            {isEditing ? "キャンセル" : "変更"}
+                            {isEditing ? t("cancel") : t("change")}
                           </button>
                           <button type="button" className="edit-button reset-shortcut-button" onClick={() => handleResetShortcut(name)}>
-                            初期化
+                            {t("reset")}
                           </button>
                         </td>
                       </tr>
@@ -303,14 +298,14 @@ export default function SettingsModal({
               </table>
             </div>
             <button type="button" className="ghost-button settings-reset-shortcuts" onClick={handleResetShortcuts}>
-              ショートカットを初期化
+              {t("resetShortcuts")}
             </button>
           </section>}
         </div>
 
         <footer className="settings-modal-actions">
-          <button type="button" className="ghost-button" onClick={onClose}>キャンセル</button>
-          <button type="button" onClick={handleSave}>保存</button>
+          <button type="button" className="ghost-button" onClick={onClose}>{t("cancel")}</button>
+          <button type="button" onClick={handleSave}>{t("save")}</button>
         </footer>
       </div>
     </div>

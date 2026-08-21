@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { formatCrop } from "../lib/crop.js";
 import { formatVideoTime } from "../lib/videoTimeline.js";
+import useLanguage from "../hooks/useLanguage.jsx";
 
 function getOutputFileNames(outputPath, fileCount) {
   const count = Math.max(0, Number(fileCount) || 0);
@@ -34,6 +35,8 @@ export function ExportConfirmDialog({
   onClose,
   onExport
 }) {
+  const { t } = useLanguage();
+
   if (!isVisible) {
     return null;
   }
@@ -42,28 +45,28 @@ export function ExportConfirmDialog({
   const outputFileNames = getOutputFileNames(outputPath, segmentsLength);
 
   return (
-    <div className="export-confirm-overlay" role="dialog" aria-modal="true" aria-label="動画出力の確認">
+    <div className="export-confirm-overlay" role="dialog" aria-modal="true" aria-label={t("outputConfirm")}>
       <div className="export-confirm-dialog card">
         <div className="panel-head">
           <div>
             <p className="eyebrow">Export Confirmation</p>
-            <h2>動画出力の確認</h2>
+            <h2>{t("outputConfirm")}</h2>
           </div>
           <div className="panel-head-meta">
-            <span>確認後に出力を開始します</span>
+            <span>{t("confirmBeforeExport")}</span>
           </div>
         </div>
 
         <div className="export-confirm-body">
           <div className="export-meta">
-            <span>ソース: {sourceName || "未選択"}</span>
-            <span>セグメント数: {segmentsLength}</span>
-            <span>出力映像長: {formatVideoTime(totalDuration)}</span>
+            <span>{t("source")}: {sourceName || t("notSelected")}</span>
+            <span>{t("segmentCount")}: {segmentsLength}</span>
+            <span>{t("outputDuration")}: {formatVideoTime(totalDuration)}</span>
             {hasCrop ? (
               <table className="export-crop-table" style={{ borderCollapse: "collapse", marginTop: 6 }}>
                 <thead>
                   <tr>
-                    <th style={{ textAlign: "left", padding: 4 }}>項目</th>
+                    <th style={{ textAlign: "left", padding: 4 }}>{t("item")}</th>
                     <th style={{ textAlign: "left", padding: 4 }}>%</th>
                     <th style={{ textAlign: "left", padding: 4 }}>px</th>
                   </tr>
@@ -83,20 +86,20 @@ export function ExportConfirmDialog({
                 </tbody>
               </table>
             ) : (
-              <span>現在の crop: {formatCrop(crop)}</span>
+              <span>{t("currentCropLabel")}: {formatCrop(crop)}</span>
             )}
-            <span>音声: {metadata.hasAudio ? "あり" : "なし"}</span>
+            <span>{t("audio")}: {metadata.hasAudio ? t("yes") : t("no")}</span>
           </div>
 
           <div className="export-meta">
-            <span>出力先: {outputPath || "未設定"}</span>
+            <span>{t("outputLocation")}: {outputPath || t("notSet")}</span>
             <div className="export-file-list">
-              <h3>出力する動画</h3>
+              <h3>{t("videosToExport")}</h3>
               <table className="export-file-table">
                 <thead>
                   <tr>
                     <th scope="col">#</th>
-                    <th scope="col">動画名</th>
+                    <th scope="col">{t("videoName")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -114,13 +117,13 @@ export function ExportConfirmDialog({
 
         <div className="action-row export-confirm-actions">
           <button type="button" className="secondary-button" onClick={onChooseOutput} disabled={isExporting}>
-            {outputPath ? "出力先を変更" : "出力先を選ぶ"}
+            {outputPath ? t("changeOutput") : t("chooseOutput")}
           </button>
           <button type="button" className="ghost-button" onClick={onClose} disabled={isExporting}>
-            キャンセル
+            {t("cancel")}
           </button>
           <button type="button" onClick={onExport} disabled={isExporting || !canExport}>
-            {isExporting ? "出力中..." : "この内容で出力"}
+            {isExporting ? t("exporting") : t("exportWithThis")}
           </button>
         </div>
       </div>
@@ -136,7 +139,7 @@ function formatElapsedTime(seconds) {
 
 export function ExportProgressDialog({
   isVisible = false,
-  message = "動画を出力中...",
+  message = "",
   progress = 0,
   indeterminate = false,
   segments = null,
@@ -145,6 +148,7 @@ export function ExportProgressDialog({
   segmentsLength = 0,
   onCancel
 }) {
+  const { t } = useLanguage();
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isCancelling, setIsCancelling] = useState(false);
   const safeProgress = Math.min(100, Math.max(0, Number(progress) || 0));
@@ -175,7 +179,7 @@ export function ExportProgressDialog({
   }
 
   return (
-    <div className="export-progress-overlay" role="dialog" aria-modal="true" aria-label="動画を出力中">
+    <div className="export-progress-overlay" role="dialog" aria-modal="true" aria-label={t("exporting")}>
       <section className="export-progress-dialog">
         <div className="export-progress-header">
           <div className="loading-spinner" aria-hidden="true">
@@ -183,20 +187,20 @@ export function ExportProgressDialog({
           </div>
           <div>
             <p className="eyebrow">Exporting Video</p>
-            <h2>動画を書き出しています</h2>
+            <h2>{t("exportingVideo")}</h2>
           </div>
         </div>
 
-        <p className="export-progress-message">{message}</p>
+        <p className="export-progress-message">{message || t("exporting")}</p>
 
         <div className="export-progress-summary">
-          <span>進捗</span>
-          <strong>{indeterminate ? "処理中..." : `${safeProgress.toFixed(1)}%`}</strong>
-          <span>経過時間</span>
+          <span>{t("progress")}</span>
+          <strong>{indeterminate ? t("processing") : `${safeProgress.toFixed(1)}%`}</strong>
+          <span>{t("elapsedTime")}</span>
           <strong>{formatElapsedTime(elapsedSeconds)}</strong>
         </div>
 
-        <div className="loading-progress-bar" aria-label={indeterminate ? "処理中" : `進捗 ${safeProgress.toFixed(1)}%`}>
+        <div className="loading-progress-bar" aria-label={indeterminate ? t("processing") : `${t("progress")} ${safeProgress.toFixed(1)}%`}>
           <div
             className={`loading-progress-fill${indeterminate ? " loading-progress-fill--indeterminate" : ""}`}
             style={indeterminate ? undefined : { width: `${safeProgress}%` }}
@@ -206,28 +210,28 @@ export function ExportProgressDialog({
         {outputFileNames.length ? (
           <div className="export-segment-progress">
             <div className="export-segment-progress__head">
-              <span>ファイル別の進捗</span>
-              <span>{outputFileNames.length} 件</span>
+              <span>{t("fileProgress")}</span>
+              <span>{outputFileNames.length} {t("items")}</span>
             </div>
             <table className="export-segment-table">
               <thead>
                 <tr>
-                  <th scope="col">ファイル</th>
-                  <th scope="col">進捗</th>
-                  <th scope="col">状態</th>
+                  <th scope="col">{t("file")}</th>
+                  <th scope="col">{t("progress")}</th>
+                  <th scope="col">{t("state")}</th>
                 </tr>
               </thead>
               <tbody>
                 {outputFileNames.map((fileName, index) => {
                   const value = segmentProgress[index] || 0;
                   const segmentValue = Math.min(100, Math.max(0, Number(value) || 0));
-                  const status = segmentValue >= 100 ? "完了" : segmentValue > 0 ? "出力中" : "待機中";
+                  const status = segmentValue >= 100 ? t("completed") : segmentValue > 0 ? t("exporting") : t("waiting");
                   return (
                     <tr key={`export-segment-${index}`}>
                       <th scope="row" title={fileName}>{fileName}</th>
                       <td>
                         <div className="export-segment-progress__cell">
-                          <div className="loading-progress-bar" aria-label={`ファイル ${index + 1} の進捗 ${segmentValue.toFixed(1)}%`}>
+                          <div className="loading-progress-bar" aria-label={`${t("file")} ${index + 1} ${t("progress")} ${segmentValue.toFixed(1)}%`}>
                             <div className="loading-progress-fill" style={{ width: `${segmentValue}%` }} />
                           </div>
                           <span>{segmentValue.toFixed(1)}%</span>
@@ -245,7 +249,7 @@ export function ExportProgressDialog({
         {onCancel && (
           <div className="export-progress-actions">
             <button type="button" className="danger-button" onClick={handleCancel} disabled={isCancelling}>
-              {isCancelling ? "キャンセル中..." : "出力をキャンセル"}
+              {isCancelling ? t("canceling") : t("cancelExport")}
             </button>
           </div>
         )}

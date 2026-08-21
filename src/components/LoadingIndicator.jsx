@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from "react";
+import useLanguage from "../hooks/useLanguage.jsx";
 
 export default function LoadingIndicator({
   isVisible = false,
-  message = "読み込み中...",
+  message = "",
   progress = 0,
   indeterminate = false,
   segments = null,
   startTime = null
 }) {
+  const { t } = useLanguage();
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const safeProgress = Math.min(100, Math.max(0, Number(progress) || 0));
   const hasSegments = Array.isArray(segments) && segments.length > 0;
@@ -47,13 +49,13 @@ export default function LoadingIndicator({
         <div className="loading-spinner">
           <div className="spinner" />
         </div>
-        <div className="loading-text">{message}</div>
+        <div className="loading-text">{message || t("loading")}</div>
 
         {Array.isArray(segments) && segments.length > 0 && (
           <div className="segments-table">
             <div className="segments-table-row segments-table-header">
               <div className="col idx">#</div>
-              <div className="col pct">進捗</div>
+              <div className="col pct">{t("progress")}</div>
             </div>
             {segments.map((pct, i) => (
               <div key={i} className="segments-table-row">
@@ -72,12 +74,12 @@ export default function LoadingIndicator({
             />
           </div>
           <div className="loading-progress-label">
-            <span>{indeterminate ? "処理中..." : `${combinedProgress.toFixed(1)}%`}</span>
+            <span>{indeterminate ? t("processing") : `${combinedProgress.toFixed(1)}%`}</span>
           </div>
         </div>
 
         <div className="loading-timer">
-          <span className="timer-label">経過時間</span>
+          <span className="timer-label">{t("elapsedTime")}</span>
           <span className="timer-value">{formatTime(elapsedSeconds)}</span>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { editorMessages } from "../lib/editorMessages.js";
+import useLanguage from "./useLanguage.jsx";
 
 // Owns output selection and export confirmation dialog actions.
 export default function useExportDialogActions({
@@ -12,6 +13,7 @@ export default function useExportDialogActions({
   setIsExportConfirmOpen,
   messages
 }) {
+  const { t } = useLanguage();
   const handleChooseOutput = useCallback(async () => {
     if (!editorApi) {
       messages.setErrorMessage(editorMessages.runOnElectron);
@@ -20,7 +22,7 @@ export default function useExportDialogActions({
     const result = await editorApi.selectOutput({ suggestedName: sourceName || "edited-video.mp4" });
     if (!result) return;
     setOutputPath(result.filePath);
-    messages.setStatusMessage(`出力先を設定しました: ${result.filePath}`);
+    messages.setStatusMessage(t("outputSet", result.filePath));
   }, [editorApi, messages, setOutputPath, sourceName]);
 
   const handleOpenExportConfirm = useCallback(() => {
@@ -50,7 +52,7 @@ export function useExportProgress(editorApi) {
   useEffect(() => {
     if (!editorApi?.onExportProgress) return undefined;
     return editorApi.onExportProgress((payload = {}) => {
-      setExportMessage(payload.message || "動画を出力中...");
+      setExportMessage(payload.message || t("exporting"));
       setExportProgress(Number(payload.progress) || 0);
       setExportIndeterminate(Boolean(payload.indeterminate));
       setExportSegments(Array.isArray(payload.segments) ? payload.segments : null);
