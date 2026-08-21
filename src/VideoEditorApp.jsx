@@ -306,7 +306,9 @@ export default function VideoEditorApp() {
     applyCropFromForm,
     handleSaveCropPreset,
     handleApplyCropPreset,
-    handleDeletePreset
+    handleDeletePreset,
+    cancelDeletePreset,
+    pendingDelete
   } = useCropPresets({
     crop,
     previewBounds,
@@ -550,13 +552,7 @@ export default function VideoEditorApp() {
               </button>
             </div>
             <button type="button" onClick={handleChooseSource}>{t("chooseVideo")}</button>
-            <OperationLogPanel
-              logs={operationLogs}
-              isOpen={false}
-              onOpen={() => setIsShowingLogViewer(true)}
-              onClose={() => setIsShowingLogViewer(false)}
-              onClearLogs={() => setOperationLogs([])}
-            />
+
             <button 
               type="button" 
               className="ghost-button" 
@@ -565,6 +561,14 @@ export default function VideoEditorApp() {
             >
               ⚙️ {t("settings")}
             </button>
+
+            <OperationLogPanel
+              logs={operationLogs}
+              isOpen={false}
+              onOpen={() => setIsShowingLogViewer(true)}
+              onClose={() => setIsShowingLogViewer(false)}
+              onClearLogs={() => setOperationLogs([])}
+            />
           </div>
         </div>
 
@@ -647,6 +651,8 @@ export default function VideoEditorApp() {
               cropPresets,
               handleApplyCropPreset,
               handleDeletePreset,
+              cancelDeletePreset,
+              pendingDelete,
               hasCrop
             }}
           />
@@ -751,6 +757,8 @@ export default function VideoEditorApp() {
         cropPresets,
         handleApplyCropPreset,
         handleDeletePreset,
+        cancelDeletePreset,
+        pendingDelete,
         hasCrop
       }} />
 

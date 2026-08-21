@@ -27,6 +27,29 @@ export default function useCropPresets({
   const { t } = useLanguage();
   const [cropForm, setCropForm] = useState({ left: 0, top: 0, width: 100, height: 100 });
   const [cropPresets, setCropPresets] = useState([]);
+  const [pendingDelete, setPendingDelete] = useState(null);
+
+  useEffect(() => {
+    if (!pendingDelete) return undefined;
+
+    const countdownTimer = window.setInterval(() => {
+      setPendingDelete((current) => {
+        if (!current) return current;
+        return { ...current, remaining: Math.max(0, current.remaining - 1) };
+      });
+    }, 1000);
+
+    const deleteTimer = window.setTimeout(() => {
+      setCropPresets((current) => current.filter((preset) => preset.id !== pendingDelete.id));
+      messages.setStatusMessage(t("cropPresetDeleted"));
+      setPendingDelete(null);
+    }, 10000);
+
+    return () => {
+      window.clearInterval(countdownTimer);
+      window.clearTimeout(deleteTimer);
+    };
+  }, [pendingDelete?.id, messages, t]);
 
   useEffect(() => {
     if (!previewBounds) return;
@@ -131,8 +154,13 @@ export default function useCropPresets({
   }
 
   function handleDeletePreset(id) {
-    setCropPresets((current) => current.filter((preset) => preset.id !== id));
-    messages.setStatusMessage(t("cropPresetDeleted"));
+    if (pendingDelete) return;
+    setPendingDelete({ id, remaining: 10 });
+  }
+
+  function cancelDeletePreset() {
+    setPendingDelete(null);
+    messages.setStatusMessage(t("cropPresetDeleteCanceled"));
   }
 
   return {
@@ -142,7 +170,9 @@ export default function useCropPresets({
     applyCropFromForm,
     handleSaveCropPreset,
     handleApplyCropPreset,
-    handleDeletePreset
+    handleDeletePreset,
+    cancelDeletePreset,
+    pendingDelete
   };
 }
 

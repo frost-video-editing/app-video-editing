@@ -1,3 +1,4 @@
+// Settings UI for keyboard shortcuts, operation logs, and import/export options.
 import React, { useEffect, useState } from "react";
 import useLanguage from "../hooks/useLanguage.jsx";
 import { OPERATION_TYPES } from "../hooks/useOperationLogs.jsx";
@@ -7,7 +8,6 @@ import {
   getDefaultShortcuts,
   getKeyCode,
   getKeyLabel,
-  getShortcutDescription,
   isValidKeyPress,
   loadShortcuts,
   saveShortcuts
@@ -37,6 +37,10 @@ export default function SettingsModal({
   const operationLabels = {
     copy: t("copy"), cut: t("cut"), paste: t("paste"), delete: t("delete"),
     undo: t("undoAction"), crop: t("crop"), export: t("export"), load: t("loadVideo")
+  };
+  const shortcutLabels = {
+    playPause: t("playPause"), cut: t("cut"), copy: t("copy"), paste: t("paste"),
+    delete: t("delete"), undo: t("undoAction"), crop: t("crop"), export: t("export")
   };
   const [draft, setDraft] = useState(null);
   const [shortcuts, setShortcuts] = useState({});
@@ -159,7 +163,10 @@ export default function SettingsModal({
             <p className="eyebrow">{t("settings")}</p>
             <h2>{t("settings")}</h2>
           </div>
-          <button type="button" className="close-button" onClick={onClose} aria-label={t("closeSettings")}>✕</button>
+          <div className="settings-header-actions">
+            <button type="button" className="ghost-button" onClick={onClose}>{t("cancel")}</button>
+            <button type="button" onClick={handleSave}>{t("save")}</button>
+          </div>
         </header>
 
         <nav className="settings-tabs" aria-label={t("settingsCategory")}>
@@ -172,7 +179,7 @@ export default function SettingsModal({
         <div className="settings-modal-body">
           {saveMessage && <div className={`message ${conflicts.length ? "error" : "success"}`}>{saveMessage}</div>}
 
-          {/* Logs save settings on setting UI */}
+          {/* Operation log recording settings. */}
           {activeTab === "logs" && <section className="settings-section settings-tab-panel">
             <h3>{t("logSettings")}</h3>
             <p className="settings-description">{t("logSettingsDescription")}</p>
@@ -184,13 +191,13 @@ export default function SettingsModal({
                     checked={!draft.excludedOperationTypes.includes(operationType)}
                     onChange={() => toggleOperationType(operationType)}
                   />
-                  {operationLabels[operationType]}{t("recordAction")}
+                  {t("recordOperation", operationLabels[operationType])}
                 </label>
               ))}
             </div>
           </section>}
 
-          {/* shortcut settings on setting UI */}
+          {/* Keyboard shortcut settings. */}
           {activeTab === "shortcuts" && <section className="settings-section settings-tab-panel">
             <h3>{t("shortcut")}</h3>
             <p className="settings-description">{t("shortcutDescription")}</p>
@@ -200,7 +207,7 @@ export default function SettingsModal({
                 <ul>
                   {conflicts.map((conflict) => (
                     <li key={conflict.key}>
-                      「{conflict.key}」: {conflict.actions.map((action) => getShortcutDescription(action)).join(", ")}
+                      「{conflict.key}」: {conflict.actions.map((action) => shortcutLabels[action] || action).join(", ")}
                     </li>
                   ))}
                 </ul>
@@ -223,7 +230,7 @@ export default function SettingsModal({
                     return (
                       <tr key={name} className={`shortcut-row ${hasConflict ? "has-conflict" : ""}`}>
                         <td className="shortcut-name">
-                          <span>{getShortcutDescription(name)}</span>
+                          <span>{shortcutLabels[name] || name}</span>
                           {hasConflict && <span className="conflict-badge">{t("duplicate")}</span>}
                         </td>
                         <td className="shortcut-key">
@@ -251,84 +258,81 @@ export default function SettingsModal({
                 </tbody>
               </table>
             </div>
+
             <button type="button" className="ghost-button settings-reset-shortcuts" onClick={handleResetShortcuts}>
               {t("resetShortcuts")}
             </button>
           </section>}
-        </div>
 
-        {/* Import settings on setting UI */}
-        {activeTab === "import" && <section className="settings-section settings-tab-panel">
-          <h3>{t("importSettings")}</h3>
-          <label className="settings-checkbox">
-            <input
-              type="checkbox"
-              checked={draft.backupSourceOnImport}
-              onChange={(event) => updateDraft("backupSourceOnImport", event.target.checked)}
-            />
-            {t("backupSourceOnImport")}
-          </label>
-        </section>}
+          {/* Source import settings. */}
+          {activeTab === "import" && <section className="settings-section settings-tab-panel">
+            <h3>{t("importSettings")}</h3>
+            <label className="settings-checkbox">
+              <input
+                type="checkbox"
+                checked={draft.backupSourceOnImport}
+                onChange={(event) => updateDraft("backupSourceOnImport", event.target.checked)}
+              />
+              {t("backupSourceOnImport")}
+            </label>
+          </section>}
 
-        {/* Export settings on setting UI */}
-        {activeTab === "export" && <section className="settings-section settings-tab-panel">
-          <h3>{t("exportSettings")}</h3>
-          <label className="settings-field">
-            {t("exportProfile")}
-            <select value={draft.exportProfile} onChange={(event) => updateDraft("exportProfile", event.target.value)}>
-              <option value="fast">{t("fast")}</option>
-              <option value="standard">{t("standard")}</option>
-              <option value="high">{t("highQuality")}</option>
-              <option value="gpu">{t("gpuFirst")}</option>
-            </select>
-          </label>
-
-          <label className="settings-checkbox">
-            <input
-              type="checkbox"
-              checked={draft.preserveCropResolution}
-              onChange={(event) => updateDraft("preserveCropResolution", event.target.checked)}
-            />
-            {t("preserveResolution")}
-          </label>
-
-          {draft.preserveCropResolution && (
+          {/* Video export settings. */}
+          {activeTab === "export" && <section className="settings-section settings-tab-panel">
+            <h3>{t("exportSettings")}</h3>
             <label className="settings-field">
-              {t("scalingAlgorithm")}
-              <select value={draft.cropScaleAlgorithm} onChange={(event) => updateDraft("cropScaleAlgorithm", event.target.value)}>
-                <option value="lanczos">{t("highQuality")} (Lanczos)</option>
-                <option value="bilinear">{t("fast")} (Bilinear)</option>
+              {t("exportProfile")}
+              <select value={draft.exportProfile} onChange={(event) => updateDraft("exportProfile", event.target.value)}>
+                <option value="fast">{t("fast")}</option>
+                <option value="standard">{t("standard")}</option>
+                <option value="high">{t("highQuality")}</option>
+                <option value="gpu">{t("gpuFirst")}</option>
               </select>
             </label>
-          )}
 
-          <label className="settings-field">
-            {t("volumeLabel")}
-            <input
-              type="range"
-              min="0"
-              max="200"
-              step="1"
-              value={draft.audioGainPercent}
-              onChange={(event) => updateDraft("audioGainPercent", Number(event.target.value))}
-            />
-            <span>{draft.audioGainPercent}%</span>
-          </label>
+            <label className="settings-checkbox">
+              <input
+                type="checkbox"
+                checked={draft.preserveCropResolution}
+                onChange={(event) => updateDraft("preserveCropResolution", event.target.checked)}
+              />
+              {t("preserveResolution")}
+            </label>
 
-          <label className="settings-checkbox">
-            <input
-              type="checkbox"
-              checked={draft.audioNormalize}
-              onChange={(event) => updateDraft("audioNormalize", event.target.checked)}
-            />
-            {t("normalizeAudio")}
-          </label>
-        </section>}
+            {draft.preserveCropResolution && (
+              <label className="settings-field">
+                {t("scalingAlgorithm")}
+                <select value={draft.cropScaleAlgorithm} onChange={(event) => updateDraft("cropScaleAlgorithm", event.target.value)}>
+                  <option value="lanczos">{t("highQuality")} (Lanczos)</option>
+                  <option value="bilinear">{t("fast")} (Bilinear)</option>
+                </select>
+              </label>
+            )}
 
-        <footer className="settings-modal-actions">
-          <button type="button" className="ghost-button" onClick={onClose}>{t("cancel")}</button>
-          <button type="button" onClick={handleSave}>{t("save")}</button>
-        </footer>
+            <label className="settings-field">
+              {t("volumeLabel")}
+              <input
+                type="range"
+                min="0"
+                max="200"
+                step="1"
+                value={draft.audioGainPercent}
+                onChange={(event) => updateDraft("audioGainPercent", Number(event.target.value))}
+              />
+              <span>{draft.audioGainPercent}%</span>
+            </label>
+
+            <label className="settings-checkbox">
+              <input
+                type="checkbox"
+                checked={draft.audioNormalize}
+                onChange={(event) => updateDraft("audioNormalize", event.target.checked)}
+              />
+              {t("normalizeAudio")}
+            </label>
+          </section>}
+        </div>
+        
       </div>
     </div>
   );
