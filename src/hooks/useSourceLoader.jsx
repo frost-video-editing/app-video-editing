@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createFullTimeline } from "../lib/videoTimeline.js";
 import { createLoadLog } from "../lib/operationLog.js";
 import { editorMessages } from "../lib/editorMessages.js";
+import useLanguage from "./useLanguage.jsx";
 
 // Owns source selection, metadata loading, and initial timeline setup.
 export default function useSourceLoader({
@@ -32,6 +33,7 @@ export default function useSourceLoader({
   stopLoadingOverlay,
   messages
 }) {
+  const { t } = useLanguage();
   const loadSource = useCallback(async (result) => {
     if (!result?.filePath) {
       stopLoadingOverlay();
@@ -50,17 +52,17 @@ export default function useSourceLoader({
     messages.clearErrorOnly();
     setIsLoading(true);
     setLoadingProgress(0);
-    setLoadingMessage("ファイル選択中...");
+    setLoadingMessage(t("selectingFile"));
     setLoadingIndeterminate(true);
     loadStartTimeRef.current = Date.now();
 
     try {
       setLoadingProgress(10);
-      setLoadingMessage("動画情報を読み込み中...");
+      setLoadingMessage(t("loadingVideoInfo"));
       const info = result.info || (await editorApi.probeVideo(result.filePath));
 
       setLoadingProgress(40);
-      setLoadingMessage("メタデータを処理中...");
+      setLoadingMessage(t("processingMetadata"));
       setLoadingIndeterminate(false);
 
       const nextSourceName = result.fileName || result.filePath.split(/[\\/]/).pop() || "video";
@@ -69,7 +71,7 @@ export default function useSourceLoader({
       setSourceName(nextSourceName);
 
       setLoadingProgress(70);
-      setLoadingMessage("タイムラインを構築中...");
+      setLoadingMessage(t("buildingTimeline"));
       setMetadata(info);
       setSegments(createFullTimeline(info.duration));
       setSelectionStart(0);
@@ -82,11 +84,11 @@ export default function useSourceLoader({
       resetCropSelection();
 
       setLoadingProgress(100);
-      setLoadingMessage("完了！");
+      setLoadingMessage(t("complete"));
       clearLoadCompletionTimeout();
       loadCompletionTimeoutRef.current = setTimeout(() => {
         stopLoadingOverlay();
-        messages.setStatusMessage("動画を読み込みました。切り取り範囲と crop を調整してください。");
+        messages.setStatusMessage(t("videoLoaded"));
         if (isOperationTypeEnabled("load")) {
           setOperationLogs((current) => [...current, createLoadLog(nextSourceName, info, result.filePath)]);
         }
@@ -101,13 +103,13 @@ export default function useSourceLoader({
 
   const handleChooseSource = useCallback(async () => {
     if (!editorApi) {
-      messages.setErrorMessage("Electron 上で起動してください。");
+      messages.setErrorMessage(t("electronRequired"));
       return;
     }
 
     setIsLoading(true);
     setLoadingProgress(0);
-    setLoadingMessage("ファイルダイアログを開いています...");
+    setLoadingMessage(t("openingFileDialog"));
     setLoadingIndeterminate(true);
     loadStartTimeRef.current = Date.now();
 
@@ -115,17 +117,17 @@ export default function useSourceLoader({
       const result = await editorApi.selectSource();
       if (!result) {
         stopLoadingOverlay();
-        messages.setStatusMessage("動画の選択をキャンセルしました。");
+        messages.setStatusMessage(t("videoSelectionCancelled"));
         return;
       }
 
-      if (editorApi.backupSource && window.confirm("インポートした元ファイルのバックアップを保存しますか？")) {
+      if (editorApi.backupSource && window.confirm(t("backupImportedFile"))) {
         try {
           const backup = await editorApi.backupSource(result.filePath);
-          if (backup?.filePath) messages.setStatusMessage("バックアップを保存しました。");
+          if (backup?.filePath) messages.setStatusMessage(t("backupSaved"));
         } catch (error) {
           console.error("Failed to save source backup", error);
-          messages.setErrorMessage("バックアップを保存できませんでした。動画の読み込みは続行します。");
+          messages.setErrorMessage(t("backupFailed"));
         }
       }
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import useLanguage from "../hooks/useLanguage.jsx";
 import {
   loadShortcuts,
   saveShortcuts,
@@ -13,6 +14,7 @@ import {
 import "../styles/shortcut-settings-modal.css";
 
 export default function ShortcutSettingsModal({ isOpen, onClose }) {
+  const { t } = useLanguage();
   const [shortcuts, setShortcuts] = useState({});
   const [editingKey, setEditingKey] = useState(null);
   const [conflicts, setConflicts] = useState([]);
@@ -51,7 +53,7 @@ export default function ShortcutSettingsModal({ isOpen, onClose }) {
     e.preventDefault?.();
 
     if (!isValidKeyPress(e)) {
-      setMessage("モディファイアキーのみは登録できません");
+      setMessage(t("modifierOnly"));
       return;
     }
 
@@ -78,30 +80,30 @@ export default function ShortcutSettingsModal({ isOpen, onClose }) {
   }
 
   function handleReset() {
-    if (window.confirm("すべてのショートカットをデフォルトに戻しますか？")) {
+    if (window.confirm(t("resetShortcutsConfirm"))) {
       setShortcuts(getDefaultShortcuts());
       setEditingKey(null);
       setConflicts([]);
-      setMessage("デフォルト設定に戻しました");
+      setMessage(t("defaultsRestored"));
       setTimeout(() => setMessage(""), 3000);
     }
   }
 
   function handleSave() {
     if (conflicts.length > 0) {
-      setMessage("ショートカットキーの重複があります。確認してください。");
+      setMessage(t("shortcutConflictCheck"));
       return;
     }
 
     const success = saveShortcuts(shortcuts);
     if (success) {
-      setMessage("ショートカット設定を保存しました");
+      setMessage(t("shortcutSaved"));
       setTimeout(() => {
         setMessage("");
         onClose();
       }, 1500);
     } else {
-      setMessage("保存に失敗しました。");
+      setMessage(t("saveFailed"));
     }
   }
 
@@ -114,8 +116,8 @@ export default function ShortcutSettingsModal({ isOpen, onClose }) {
     <div className="shortcut-modal-overlay" onClick={onClose}>
       <div className="shortcut-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="shortcut-modal-header">
-          <h2>ショートカットキー設定</h2>
-          <button type="button" className="close-button" onClick={onClose} aria-label="設定を閉じる">✕</button>
+          <h2>{t("shortcutSettings")}</h2>
+          <button type="button" className="close-button" onClick={onClose} aria-label={t("closeSettings")}>✕</button>
         </div>
 
         <div className="shortcut-modal-body">
@@ -127,7 +129,7 @@ export default function ShortcutSettingsModal({ isOpen, onClose }) {
 
           {hasConflict && (
             <div className="conflict-warning">
-              <strong>⚠️ ショートカットキーの重複を検出しました：</strong>
+              <strong>⚠️ {t("shortcutConflictDetected")}</strong>
               <ul>
                 {conflicts.map((conflict, idx) => (
                   <li key={idx}>
@@ -142,8 +144,8 @@ export default function ShortcutSettingsModal({ isOpen, onClose }) {
             <table className="shortcut-table">
               <thead>
                 <tr>
-                  <th>機能</th>
-                  <th>現在のキー</th>
+                    <th>{t("function")}</th>
+                    <th>{t("currentKey")}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -157,14 +159,14 @@ export default function ShortcutSettingsModal({ isOpen, onClose }) {
                     <tr key={name} className={`shortcut-row ${hasThisConflict ? "has-conflict" : ""}`}>
                       <td className="shortcut-name">
                         <span>{getShortcutDescription(name)}</span>
-                        {hasThisConflict && <span className="conflict-badge">重複</span>}
+                        {hasThisConflict && <span className="conflict-badge">{t("duplicate")}</span>}
                       </td>
                       <td className="shortcut-key">
                         {isEditing ? (
                           <input
                             type="text"
                             className="key-input"
-                            placeholder="キーを押してください..."
+                            placeholder={t("pressKey")}
                             onKeyDown={(e) => handleKeyDown(e, name)}
                             autoFocus
                           />
@@ -178,15 +180,15 @@ export default function ShortcutSettingsModal({ isOpen, onClose }) {
                           className={`edit-button ${isEditing ? "active" : ""}`}
                           onClick={() => setEditingKey(isEditing ? null : name)}
                         >
-                          {isEditing ? "キャンセル" : "変更"}
+                          {isEditing ? t("cancel") : t("change")}
                         </button>
                         <button
                           type="button"
                           className="edit-button reset-shortcut-button"
                           onClick={() => handleResetShortcut(name)}
-                          title="このキーだけデフォルトに戻す"
+                          title={t("resetThisKey")}
                         >
-                          初期化
+                          {t("reset")}
                         </button>
                       </td>
                     </tr>
@@ -199,20 +201,20 @@ export default function ShortcutSettingsModal({ isOpen, onClose }) {
 
         <div className="shortcut-modal-footer">
           <button type="button" className="button ghost-button" onClick={handleReset}>
-            デフォルトに戻す
+            {t("restoreDefaults")}
           </button>
           <div style={{ flex: 1 }}></div>
           <button type="button" className="button ghost-button" onClick={onClose}>
-            キャンセル
+            {t("cancel")}
           </button>
           <button 
             type="button"
             className="button secondary-button" 
             onClick={handleSave}
             disabled={hasConflict}
-            title={hasConflict ? "重複を解決してから保存してください" : ""}
+            title={hasConflict ? t("resolveShortcutConflicts") : ""}
           >
-            保存
+            {t("save")}
           </button>
         </div>
       </div>

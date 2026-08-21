@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { formatVideoTime, segmentDuration } from "../lib/videoTimeline.js";
+import useLanguage from "../hooks/useLanguage.jsx";
 
 function formatTimeShort(seconds) {
   const total = Math.max(0, Number(seconds) || 0);
@@ -30,6 +31,7 @@ function TimelineVisualizer({
   onSelectionEndChange = () => {},
   onSegmentClick = () => {}
 }) {
+  const { t } = useLanguage();
   const containerRef = useRef(null);
   const [draggingMode, setDraggingMode] = useState(null); // null | 'playhead' | 'start' | 'end' | 'timeline'
   const [containerWidth, setContainerWidth] = useState(0);
@@ -131,7 +133,7 @@ function TimelineVisualizer({
     <div className="timeline-visualizer-container">
       <div className="timeline-time-display">
         <label className="timeline-time-input-label">
-          <span className="sr-only">再生位置</span>
+          <span className="sr-only">{t("playhead")}</span>
           <input
             className={`timeline-time-input ${isTimeInputInvalid ? "timeline-time-input--invalid" : ""}`}
             value={timeInput}
@@ -139,8 +141,8 @@ function TimelineVisualizer({
             onChange={(event) => setTimeInput(event.target.value)}
             onBlur={() => { commitTimeInput(); setIsTimeInputFocused(false); }}
             onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
-            aria-label="再生位置（分:秒）"
-            title="例: 10:00 で10秒へ移動"
+            aria-label={t("playheadMinutes")}
+            title={t("playheadExample")}
           />
         </label>
         <span className="time-divider">/</span>
@@ -201,15 +203,15 @@ function TimelineVisualizer({
 
       <div className="timeline-info-row">
         <div className="timeline-info-item">
-          <span className="label">開始</span>
+          <span className="label">{t("start")}</span>
           <strong>{formatTimeShort(selectionStart)}</strong>
         </div>
         <div className="timeline-info-item">
-          <span className="label">終了</span>
+          <span className="label">{t("end")}</span>
           <strong>{formatTimeShort(selectionEnd)}</strong>
         </div>
         <div className="timeline-info-item">
-          <span className="label">再生位置</span>
+          <span className="label">{t("playhead")}</span>
           <strong>{formatTimeShort(playhead)}</strong>
         </div>
       </div>
@@ -231,6 +233,7 @@ function TimelineEditor({
   onSegmentClick,
   onMoveSegment
 }) {
+  const { t } = useLanguage();
   const selectedSegment = selectedSegmentIndex === null ? null : segments[selectedSegmentIndex];
 
   return (
@@ -250,9 +253,9 @@ function TimelineEditor({
 
       {selectedSegment ? (
         <div className="segment-reorder-actions">
-          <span>選択パーツ: {selectedSegmentIndex + 1} / {segments.length}</span>
-          <button type="button" className="ghost-button" onClick={() => onMoveSegment(selectedSegmentIndex, -1)} disabled={selectedSegmentIndex === 0}>前へ</button>
-          <button type="button" className="ghost-button" onClick={() => onMoveSegment(selectedSegmentIndex, 1)} disabled={selectedSegmentIndex === segments.length - 1}>後へ</button>
+          <span>{t("selectedPart")}: {selectedSegmentIndex + 1} / {segments.length}</span>
+          <button type="button" className="ghost-button" onClick={() => onMoveSegment(selectedSegmentIndex, -1)} disabled={selectedSegmentIndex === 0}>{t("previous")}</button>
+          <button type="button" className="ghost-button" onClick={() => onMoveSegment(selectedSegmentIndex, 1)} disabled={selectedSegmentIndex === segments.length - 1}>{t("next")}</button>
         </div>
       ) : null}
     </>
@@ -260,15 +263,16 @@ function TimelineEditor({
 }
 
 export function TimelinePanel({ segments, isExporting, onDeleteSegment }) {
+  const { t } = useLanguage();
   return (
     <section className="side-section timeline-panel">
       <div className="panel-head">
         <div>
           <p className="eyebrow">Composition</p>
-          <h2>現在のタイムライン</h2>
+          <h2>{t("timeline")}</h2>
         </div>
         <div className="panel-head-meta">
-          <span>順序どおりに export されます</span>
+          <span>{t("exportOrder")}</span>
         </div>
       </div>
 
@@ -281,15 +285,15 @@ export function TimelinePanel({ segments, isExporting, onDeleteSegment }) {
                 <span className="timeline-index">{String(index + 1).padStart(2, "0")}</span>
                 <div>
                   <strong>{formatVideoTime(segment.start)} - {formatVideoTime(segment.end)}</strong>
-                  <p>長さ {formatVideoTime(duration)}</p>
+                  <p>{t("length")} {formatVideoTime(duration)}</p>
                 </div>
                 <div className="timeline-badge">{duration.toFixed(2)}s</div>
-                <button type="button" className="ghost-button timeline-item-delete" onClick={() => onDeleteSegment(index)} disabled={isExporting}>削除</button>
+                <button type="button" className="ghost-button timeline-item-delete" onClick={() => onDeleteSegment(index)} disabled={isExporting}>{t("delete")}</button>
               </div>
             );
           })
         ) : (
-          <div className="timeline-empty">まだセグメントがありません。</div>
+          <div className="timeline-empty">{t("noSegments")}</div>
         )}
       </div>
     </section>

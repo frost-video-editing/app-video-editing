@@ -12,6 +12,7 @@ import {
 } from "../lib/videoTimeline.js";
 import { createHandleCopySelection } from "../lib/timelineOperations.js";
 import { editorMessages } from "../lib/editorMessages.js";
+import useLanguage from "./useLanguage.jsx";
 
 // Owns copy, delete, cut, paste, insert, and segment reorder actions.
 export default function useTimelineEditingActions({
@@ -36,6 +37,7 @@ export default function useTimelineEditingActions({
   messages,
   addOperationLog
 }) {
+  const { t } = useLanguage();
   const handleCopy = useMemo(() => {
     const copySelection = createHandleCopySelection({
       segments,
@@ -50,7 +52,7 @@ export default function useTimelineEditingActions({
       copySelection();
       addOperationLog("copy");
     };
-  }, [addOperationLog, messages, segments, selectionEnd, selectionStart, setClipBank, setClipboard, setPlayheadWithPreview]);
+  }, [addOperationLog, messages, segments, selectionEnd, selectionStart, setClipBank, setClipboard, setPlayheadWithPreview, t]);
 
   const handleDelete = useCallback(() => {
     if (selectedDuration === 0) {
@@ -61,10 +63,10 @@ export default function useTimelineEditingActions({
     setSegments(removeRange(segments, selectedRange.start, selectedRange.end));
     setSelectionEnd(selectedRange.start);
     setPlayheadWithPreview(selectedRange.start);
-    messages.setStatusMessage("選択範囲を削除しました。");
+    messages.setStatusMessage(t("selectionDeleted"));
     messages.clearErrorOnly();
     addOperationLog("delete");
-  }, [addOperationLog, messages, pushUndoSnapshot, selectedDuration, selectedRange, segments, setPlayheadWithPreview, setSegments, setSelectionEnd]);
+  }, [addOperationLog, messages, pushUndoSnapshot, selectedDuration, selectedRange, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, t]);
 
   const handleDeleteSegment = useCallback((index) => {
     if (index < 0 || index >= segments.length) return;
@@ -75,15 +77,15 @@ export default function useTimelineEditingActions({
     setSelectionStart((current) => clamp(current, 0, nextDuration));
     setSelectionEnd((current) => clamp(current, 0, nextDuration));
     setPlayheadWithPreview(clamp(playhead, 0, nextDuration));
-    messages.setStatusMessage(`パーツ ${index + 1} を削除しました。`);
+    messages.setStatusMessage(t("partDeleted", index + 1));
     messages.clearErrorOnly();
     addOperationLog("delete");
-  }, [addOperationLog, messages, playhead, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart]);
+  }, [addOperationLog, messages, playhead, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, t]);
 
   const handleCut = useCallback(() => {
     const splitTime = clamp(Number(playhead) || 0, 0, totalDuration);
     if (splitTime <= 0 || splitTime >= totalDuration) {
-      messages.setErrorMessage("先頭または末尾では切り取りできません。中間の位置で押してください。");
+      messages.setErrorMessage(t("cannotCutAtEnds"));
       return;
     }
     const next = splitSegmentsAtTimelinePositions(segments, [splitTime]);
@@ -101,10 +103,10 @@ export default function useTimelineEditingActions({
     setSelectionStart(splitTime);
     setSelectionEnd(splitTime);
     setPlayheadWithPreview(splitTime);
-    messages.setStatusMessage(`${formatVideoTime(splitTime)} でタイムラインを分割しました。`);
+    messages.setStatusMessage(t("timelineSplit", formatVideoTime(splitTime)));
     messages.clearErrorOnly();
     addOperationLog("cut");
-  }, [addOperationLog, messages, playhead, pushUndoSnapshot, segments, setCutMarkers, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, totalDuration]);
+  }, [addOperationLog, messages, playhead, pushUndoSnapshot, segments, setCutMarkers, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, totalDuration, t]);
 
   const moveSegment = useCallback((index, direction) => {
     const targetIndex = index + direction;
@@ -122,9 +124,9 @@ export default function useTimelineEditingActions({
     setSelectionStart(nextStart);
     setSelectionEnd(nextEnd);
     setPlayheadWithPreview(nextStart, nextSegments);
-    messages.setStatusMessage(`パーツ ${targetIndex + 1} に移動しました。`);
+    messages.setStatusMessage(t("partMoved", targetIndex + 1));
     messages.clearErrorOnly();
-  }, [messages, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectedSegmentIndex, setSelectionEnd, setSelectionStart]);
+  }, [messages, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectedSegmentIndex, setSelectionEnd, setSelectionStart, t]);
 
   const handlePaste = useCallback(() => {
     if (!clipboard.length) {
@@ -138,10 +140,10 @@ export default function useTimelineEditingActions({
     setSelectionStart(playhead);
     setSelectionEnd(playhead + insertedDuration);
     setPlayheadWithPreview(playhead + insertedDuration);
-    messages.setStatusMessage(`貼り付けました。長さ ${formatVideoTime(insertedDuration)} を挿入しました。`);
+    messages.setStatusMessage(t("pastedDuration", formatVideoTime(insertedDuration)));
     messages.clearErrorOnly();
     addOperationLog("paste");
-  }, [addOperationLog, clipboard, messages, playhead, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart]);
+  }, [addOperationLog, clipboard, messages, playhead, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, t]);
 
   const handleInsertClip = useCallback((clip) => {
     if (!clip) return;
@@ -153,9 +155,9 @@ export default function useTimelineEditingActions({
     setSelectionStart(playhead);
     setSelectionEnd(playhead + insertedDuration);
     setPlayheadWithPreview(playhead + insertedDuration);
-    messages.setStatusMessage(`クリップを挿入しました。長さ ${formatVideoTime(insertedDuration)}`);
+    messages.setStatusMessage(t("clipInsertedDuration", formatVideoTime(insertedDuration)));
     messages.clearErrorOnly();
-  }, [messages, playhead, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart]);
+  }, [messages, playhead, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, t]);
 
   return { handleCopy, handleDelete, handleDeleteSegment, handleCut, moveSegment, handlePaste, handleInsertClip };
 }
@@ -178,20 +180,21 @@ export function useTimelineActions({
   pushUndoSnapshot,
   messages
 }) {
+  const { t } = useLanguage();
   const handleSplitAtPreview = useCallback(() => {
     if (!segments.length) {
-      messages.setErrorMessage("先に動画を選択してください。");
+      messages.setErrorMessage(t("chooseVideoFirst"));
       return;
     }
 
     if (selectedDuration > 0) {
       const next = splitSegmentsAtTimelinePositions(segments, [selectedRange.start, selectedRange.end]);
       if (!next) {
-        messages.setErrorMessage("選択範囲で分割できる場所がありません。");
+        messages.setErrorMessage(t("noSplitPointInSelection"));
         return;
       }
       if (next.length === segments.length && next.every((segment, index) => segment.start === segments[index]?.start && segment.end === segments[index]?.end)) {
-        messages.setErrorMessage("選択範囲は既にセグメント境界に分かれています。");
+        messages.setErrorMessage(t("alreadySegmentBoundary"));
         return;
       }
       pushUndoSnapshot();
@@ -199,7 +202,7 @@ export function useTimelineActions({
       setSelectionStart(selectedRange.start);
       setSelectionEnd(selectedRange.end);
       setPlayheadWithPreview(selectedRange.start);
-      messages.setStatusMessage(`選択範囲 ${formatVideoTime(selectedRange.start)} - ${formatVideoTime(selectedRange.end)} で分割しました。`);
+      messages.setStatusMessage(t("selectionSplit", formatVideoTime(selectedRange.start), formatVideoTime(selectedRange.end)));
       messages.clearErrorOnly();
       return;
     }
@@ -207,7 +210,7 @@ export function useTimelineActions({
     const sourceTime = Number(previewVideoRef.current?.currentTime) || previewCurrentTime;
     const result = splitSegmentsAtPreviewTime(segments, sourceTime, playhead);
     if (!result) {
-      messages.setErrorMessage("現在の画面位置では分割できません。セグメントの内側で停止してください。");
+      messages.setErrorMessage(t("cannotSplitAtPosition"));
       return;
     }
 
@@ -216,9 +219,9 @@ export function useTimelineActions({
     setSelectionStart(result.timelineSplitTime);
     setSelectionEnd(result.timelineSplitTime);
     setPlayheadWithPreview(result.timelineSplitTime);
-    messages.setStatusMessage(`画面の位置 ${formatVideoTime(sourceTime)} で分割しました。`);
+    messages.setStatusMessage(t("positionSplit", formatVideoTime(sourceTime)));
     messages.clearErrorOnly();
-  }, [messages, playhead, previewCurrentTime, previewVideoRef, pushUndoSnapshot, selectedDuration, selectedRange, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart]);
+  }, [messages, playhead, previewCurrentTime, previewVideoRef, pushUndoSnapshot, selectedDuration, selectedRange, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, t]);
 
   const handleResetTimeline = useCallback(() => {
     if (!metadataDuration) return;
@@ -228,9 +231,9 @@ export function useTimelineActions({
     setSelectionEnd(metadataDuration);
     setPlayheadWithPreview(0);
     setClipboard([]);
-    messages.setStatusMessage("タイムラインを初期状態に戻しました。");
+    messages.setStatusMessage(t("timelineReset"));
     messages.clearErrorOnly();
-  }, [metadataDuration, messages, pushUndoSnapshot, setClipboard, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart]);
+  }, [metadataDuration, messages, pushUndoSnapshot, setClipboard, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, t]);
 
   return { handleSplitAtPreview, handleResetTimeline };
 }
