@@ -69,7 +69,7 @@
     "@vitejs/plugin-react": "^6.0.4",
     "babel-jest": "^30.4.1",
     "concurrently": "^10.0.4",
-    "electron": "^43.3.0",
+    "electron": "^43.4.0",
     "electron-builder": "^26.15.3",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^30.4.2",
