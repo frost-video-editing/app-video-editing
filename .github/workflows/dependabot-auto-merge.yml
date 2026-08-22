@@ -24,7 +24,7 @@ jobs:
     if: github.actor == 'dependabot[bot]' || github.event_name == 'workflow_dispatch'
 
     steps:
-      - name: Enable auto-merge for patch/minor updates
+      - name: Merge Dependabot updates
         uses: actions/github-script@v9
         with:
           script: |
@@ -46,26 +46,26 @@ jobs:
                   return;
                 }
 
-                // Extract version numbers from PR title (supports various formats: "from X to Y", "from X.Y to A.B", "from X.Y.Z to A.B.C")
-                const versionMatch = title.match(/from\s+([\d.]+)\s+to\s+([\d.]+)/);
-                
-                if (!versionMatch) {
-                  core.info(`PR #${prNumber}: Could not parse version numbers — skipping.`);
+                // Dependabot titles vary by ecosystem and may not include version numbers.
+                if (pr.data.user?.login !== 'dependabot[bot]') {
+                  core.info(`PR #${prNumber}: Not authored by Dependabot — skipping.`);
                   return;
                 }
 
-                const oldVersionStr = versionMatch[1];
-                const newVersionStr = versionMatch[2];
-                
-                core.info(`PR #${prNumber}: Version update (${oldVersionStr} → ${newVersionStr})`);
+                core.info(`PR #${prNumber}: Dependabot update accepted for merge.`);
 
                 // Merge the PR (no version filtering - merge all updates)
-                await github.rest.pulls.merge({
+                const mergeResult = await github.rest.pulls.merge({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   pull_number: prNumber,
                   merge_method: "squash"
                 });
+
+                if (!mergeResult.data.merged) {
+                  core.warning(`PR #${prNumber}: GitHub did not merge the pull request: ${mergeResult.data.message || 'unknown reason'}`);
+                  return;
+                }
 
                 core.info(`PR #${prNumber}: Auto-merged.`);
 
@@ -115,11 +115,10 @@ jobs:
                   per_page: 100
                 });
                 
-                // Filter for Dependabot PRs by checking user and version pattern in title
+                // Filter for Dependabot PRs. Titles differ between package ecosystems.
                 const dependabotPRs = allPRs.data.filter(pr => {
                   const isDependabot = pr.user.login === 'dependabot[bot]';
-                  const hasVersionPattern = /from\s+[\d.]+\s+to\s+[\d.]+/.test(pr.title);
-                  return isDependabot && hasVersionPattern;
+                  return isDependabot;
                 });
                 
                 prNumbers = dependabotPRs.map(pr => pr.number);
