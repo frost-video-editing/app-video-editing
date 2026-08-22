@@ -66,6 +66,10 @@ export default function VideoEditorApp() {
   const [outputPath, setOutputPath] = useState("");
   const [isExportConfirmOpen, setIsExportConfirmOpen] = useState(false);
   const [preserveCropResolution, setPreserveCropResolution] = useState(true);
+  const [backupSourceOnImport, setBackupSourceOnImport] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("videoEditor.backupSourceOnImport") === "true";
+  });
   const [cropScaleAlgorithm, setCropScaleAlgorithm] = useState("lanczos");
   const [exportProfile, setExportProfile] = useState("standard");
 
@@ -278,6 +282,7 @@ export default function VideoEditorApp() {
     setLoadingProgress,
     setLoadingMessage,
     setLoadingIndeterminate,
+    backupSourceOnImport,
     loadStartTimeRef,
     loadCompletionTimeoutRef,
     clearLoadCompletionTimeout,
@@ -301,7 +306,9 @@ export default function VideoEditorApp() {
     applyCropFromForm,
     handleSaveCropPreset,
     handleApplyCropPreset,
-    handleDeletePreset
+    handleDeletePreset,
+    cancelDeletePreset,
+    pendingDelete
   } = useCropPresets({
     crop,
     previewBounds,
@@ -503,6 +510,8 @@ export default function VideoEditorApp() {
         onClose={() => setIsSettingsOpen(false)}
         preserveCropResolution={preserveCropResolution}
         setPreserveCropResolution={setPreserveCropResolution}
+        backupSourceOnImport={backupSourceOnImport}
+        setBackupSourceOnImport={setBackupSourceOnImport}
         cropScaleAlgorithm={cropScaleAlgorithm}
         setCropScaleAlgorithm={setCropScaleAlgorithm}
         exportProfile={exportProfile}
@@ -543,13 +552,7 @@ export default function VideoEditorApp() {
               </button>
             </div>
             <button type="button" onClick={handleChooseSource}>{t("chooseVideo")}</button>
-            <OperationLogPanel
-              logs={operationLogs}
-              isOpen={false}
-              onOpen={() => setIsShowingLogViewer(true)}
-              onClose={() => setIsShowingLogViewer(false)}
-              onClearLogs={() => setOperationLogs([])}
-            />
+
             <button 
               type="button" 
               className="ghost-button" 
@@ -558,6 +561,14 @@ export default function VideoEditorApp() {
             >
               ⚙️ {t("settings")}
             </button>
+
+            <OperationLogPanel
+              logs={operationLogs}
+              isOpen={false}
+              onOpen={() => setIsShowingLogViewer(true)}
+              onClose={() => setIsShowingLogViewer(false)}
+              onClearLogs={() => setOperationLogs([])}
+            />
           </div>
         </div>
 
@@ -640,6 +651,8 @@ export default function VideoEditorApp() {
               cropPresets,
               handleApplyCropPreset,
               handleDeletePreset,
+              cancelDeletePreset,
+              pendingDelete,
               hasCrop
             }}
           />
@@ -744,6 +757,8 @@ export default function VideoEditorApp() {
         cropPresets,
         handleApplyCropPreset,
         handleDeletePreset,
+        cancelDeletePreset,
+        pendingDelete,
         hasCrop
       }} />
 

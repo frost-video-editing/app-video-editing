@@ -52,6 +52,7 @@ export function loadShortcuts() {
 export function saveShortcuts(shortcuts) {
   try {
     localStorage.setItem("videoEditor.shortcuts", JSON.stringify(shortcuts));
+    window.dispatchEvent(new CustomEvent("videoEditor.shortcutsChanged"));
     return true;
   } catch (e) {
     console.error("Failed to save shortcuts:", e);

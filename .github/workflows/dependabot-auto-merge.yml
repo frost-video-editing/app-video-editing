@@ -1,0 +1,146 @@
+name: Dependabot Auto Merge
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Pull Request number to merge (leave empty for PR events)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Enable auto-merge for patch/minor updates
+        uses: actions/github-script@v9
+        with:
+          script: |
+            // Helper function to process and merge a single PR
+            async function processPR(prNumber) {
+              try {
+                const pr = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber
+                });
+
+                const title = pr.data.title;
+                core.info(`Processing PR #${prNumber}: ${title}`);
+
+                // Check for merge conflicts
+                if (pr.data.mergeable === false) {
+                  core.warning(`PR #${prNumber}: Has merge conflicts — skipping.`);
+                  return;
+                }
+
+                // Extract version numbers from PR title (supports various formats: "from X to Y", "from X.Y to A.B", "from X.Y.Z to A.B.C")
+                const versionMatch = title.match(/from\s+([\d.]+)\s+to\s+([\d.]+)/);
+                
+                if (!versionMatch) {
+                  core.info(`PR #${prNumber}: Could not parse version numbers — skipping.`);
+                  return;
+                }
+
+                const oldVersionStr = versionMatch[1];
+                const newVersionStr = versionMatch[2];
+                
+                core.info(`PR #${prNumber}: Version update (${oldVersionStr} → ${newVersionStr})`);
+
+                // Merge the PR (no version filtering - merge all updates)
+                await github.rest.pulls.merge({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber,
+                  merge_method: "squash"
+                });
+
+                core.info(`PR #${prNumber}: Auto-merged.`);
+
+                // Delete the branch after successful merge
+                const headRef = pr.data.head.ref;
+                try {
+                  await github.rest.git.deleteRef({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    ref: `heads/${headRef}`
+                  });
+                  core.info(`PR #${prNumber}: Branch '${headRef}' deleted successfully.`);
+                } catch (error) {
+                  core.warning(`PR #${prNumber}: Failed to delete branch '${headRef}': ${error.message}`);
+                }
+              } catch (error) {
+                if (error.message.includes('Merge conflict')) {
+                  core.warning(`PR #${prNumber}: Merge conflict detected — skipping.`);
+                } else {
+                  core.warning(`Failed to process PR #${prNumber}: ${error.message}`);
+                }
+              }
+            }
+
+            // Determine which PRs to process
+            let prNumbers = [];
+            
+            if (context.eventName === 'workflow_dispatch') {
+              const inputPr = context.payload.inputs?.pr_number;
+              if (inputPr && inputPr.trim() !== '') {
+                // Manual trigger with specific PR number
+                const prNum = parseInt(inputPr, 10);
+                if (isNaN(prNum)) {
+                  core.setFailed('Invalid PR number: must be a number');
+                  return;
+                }
+                prNumbers = [prNum];
+              } else {
+                // Manual trigger without PR number: search for all Dependabot PRs
+                core.info('No PR number specified — searching for open Dependabot PRs...');
+                
+                // Fetch all open PRs and filter for Dependabot PRs
+                const allPRs = await github.rest.pulls.list({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'open',
+                  per_page: 100
+                });
+                
+                // Filter for Dependabot PRs by checking user and version pattern in title
+                const dependabotPRs = allPRs.data.filter(pr => {
+                  const isDependabot = pr.user.login === 'dependabot[bot]';
+                  const hasVersionPattern = /from\s+[\d.]+\s+to\s+[\d.]+/.test(pr.title);
+                  return isDependabot && hasVersionPattern;
+                });
+                
+                prNumbers = dependabotPRs.map(pr => pr.number);
+                core.info(`Found ${prNumbers.length} open Dependabot PRs: ${prNumbers.join(', ')}`);
+              }
+            } else {
+              // Pull request event: process the current PR
+              const prNum = context.payload.pull_request?.number;
+              if (!prNum) {
+                core.setFailed('PR number not found in event payload');
+                return;
+              }
+              prNumbers = [prNum];
+            }
+
+            // Process all PRs
+            if (prNumbers.length === 0) {
+              core.info('No PRs to process.');
+              return;
+            }
+
+            for (const prNumber of prNumbers) {
+              await processPR(prNumber);
+            }

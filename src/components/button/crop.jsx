@@ -15,6 +15,8 @@ export function CropControls({
   cropPresets,
   handleApplyCropPreset,
   handleDeletePreset,
+  cancelDeletePreset,
+  pendingDelete,
   hasCrop
 }) {
   const { t } = useLanguage();
@@ -63,19 +65,27 @@ export function CropControls({
         </div>
 
         {cropPresets.length ? (
-          <div style={{ marginTop: 8 }}>
-            <strong>{t("savedPresets")}</strong>
+          <details style={{ marginTop: 8 }}>
+            <summary style={{ cursor: "pointer", fontWeight: 700 }}>{t("savedPresets")}</summary>
             <ul style={{ listStyle: "none", padding: 0, margin: "6px 0 0 0" }}>
               {cropPresets.map((p) => (
                 <li key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <div style={{ flex: 1 }}>{p.name}</div>
                   <div style={{ color: "#666", fontSize: 12 }}>{(p.crop && p.crop.left != null) ? `${p.crop.left.toFixed(2)}% / ${p.crop.top.toFixed(2)}%` : "-"}</div>
                   <button type="button" className="ghost-button" onClick={() => handleApplyCropPreset(p)}>{t("apply")}</button>
-                  <button type="button" className="timeline-item-delete" onClick={() => handleDeletePreset(p.id)}>{t("delete")}</button>
+                  {pendingDelete?.id === p.id ? (
+                    <button type="button" className="timeline-item-delete" onClick={cancelDeletePreset}>
+                      {t("cancel")} ({pendingDelete.remaining})
+                    </button>
+                  ) : (
+                    <button type="button" className="timeline-item-delete" onClick={() => handleDeletePreset(p.id)} disabled={Boolean(pendingDelete)}>
+                      {t("delete")}
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
-          </div>
+          </details>
         ) : null}
       </div>
     </div>

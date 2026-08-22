@@ -1,3 +1,4 @@
+// Settings UI for keyboard shortcuts, operation logs, and import/export options.
 import React, { useEffect, useState } from "react";
 import useLanguage from "../hooks/useLanguage.jsx";
 import { OPERATION_TYPES } from "../hooks/useOperationLogs.jsx";
@@ -7,7 +8,6 @@ import {
   getDefaultShortcuts,
   getKeyCode,
   getKeyLabel,
-  getShortcutDescription,
   isValidKeyPress,
   loadShortcuts,
   saveShortcuts
@@ -20,6 +20,8 @@ export default function SettingsModal({
   onClose,
   preserveCropResolution,
   setPreserveCropResolution,
+  backupSourceOnImport,
+  setBackupSourceOnImport,
   cropScaleAlgorithm,
   setCropScaleAlgorithm,
   exportProfile,
@@ -36,6 +38,10 @@ export default function SettingsModal({
     copy: t("copy"), cut: t("cut"), paste: t("paste"), delete: t("delete"),
     undo: t("undoAction"), crop: t("crop"), export: t("export"), load: t("loadVideo")
   };
+  const shortcutLabels = {
+    playPause: t("playPause"), cut: t("cut"), copy: t("copy"), paste: t("paste"),
+    delete: t("delete"), undo: t("undoAction"), crop: t("crop"), export: t("export")
+  };
   const [draft, setDraft] = useState(null);
   const [shortcuts, setShortcuts] = useState({});
   const [editingKey, setEditingKey] = useState(null);
@@ -47,6 +53,7 @@ export default function SettingsModal({
     if (!isOpen) return;
     setDraft({
       preserveCropResolution,
+      backupSourceOnImport,
       cropScaleAlgorithm,
       exportProfile,
       audioGainPercent,
@@ -136,6 +143,8 @@ export default function SettingsModal({
     }
 
     setPreserveCropResolution(draft.preserveCropResolution);
+    setBackupSourceOnImport(draft.backupSourceOnImport);
+    window.localStorage.setItem("videoEditor.backupSourceOnImport", String(draft.backupSourceOnImport));
     setCropScaleAlgorithm(draft.cropScaleAlgorithm);
     setExportProfile(draft.exportProfile);
     setAudioGainPercent(draft.audioGainPercent);
@@ -154,18 +163,121 @@ export default function SettingsModal({
             <p className="eyebrow">{t("settings")}</p>
             <h2>{t("settings")}</h2>
           </div>
-          <button type="button" className="close-button" onClick={onClose} aria-label={t("closeSettings")}>✕</button>
+          <div className="settings-header-actions">
+            <button type="button" className="ghost-button" onClick={onClose}>{t("cancel")}</button>
+            <button type="button" onClick={handleSave}>{t("save")}</button>
+          </div>
         </header>
 
         <nav className="settings-tabs" aria-label={t("settingsCategory")}>
           <button type="button" className={activeTab === "logs" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("logs")}>{t("logSettings")}</button>
           <button type="button" className={activeTab === "shortcuts" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("shortcuts")}>{t("shortcut")}</button>
+          <button type="button" className={activeTab === "import" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("import")}>{t("importSettings")}</button>
           <button type="button" className={activeTab === "export" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("export")}>{t("exportSettings")}</button>
         </nav>
 
         <div className="settings-modal-body">
           {saveMessage && <div className={`message ${conflicts.length ? "error" : "success"}`}>{saveMessage}</div>}
 
+          {/* Operation log recording settings. */}
+          {activeTab === "logs" && <section className="settings-section settings-tab-panel">
+            <h3>{t("logSettings")}</h3>
+            <p className="settings-description">{t("logSettingsDescription")}</p>
+            <div className="settings-log-options">
+              {OPERATION_TYPES.map((operationType) => (
+                <label className="settings-checkbox" key={operationType}>
+                  <input
+                    type="checkbox"
+                    checked={!draft.excludedOperationTypes.includes(operationType)}
+                    onChange={() => toggleOperationType(operationType)}
+                  />
+                  {t("recordOperation", operationLabels[operationType])}
+                </label>
+              ))}
+            </div>
+          </section>}
+
+          {/* Keyboard shortcut settings. */}
+          {activeTab === "shortcuts" && <section className="settings-section settings-tab-panel">
+            <h3>{t("shortcut")}</h3>
+            <p className="settings-description">{t("shortcutDescription")}</p>
+            {conflicts.length > 0 && (
+              <div className="conflict-warning">
+                <strong>{t("shortcutConflict")}</strong>
+                <ul>
+                  {conflicts.map((conflict) => (
+                    <li key={conflict.key}>
+                      「{conflict.key}」: {conflict.actions.map((action) => shortcutLabels[action] || action).join(", ")}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className="shortcut-table-wrapper">
+              <table className="shortcut-table">
+                <thead>
+                  <tr>
+                    <th>{t("function")}</th>
+                    <th>{t("currentKey")}</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shortcutNames.map((name) => {
+                    const config = shortcuts[name];
+                    const isEditing = editingKey === name;
+                    const hasConflict = conflicts.some((conflict) => conflict.actions.includes(name));
+                    return (
+                      <tr key={name} className={`shortcut-row ${hasConflict ? "has-conflict" : ""}`}>
+                        <td className="shortcut-name">
+                          <span>{shortcutLabels[name] || name}</span>
+                          {hasConflict && <span className="conflict-badge">{t("duplicate")}</span>}
+                        </td>
+                        <td className="shortcut-key">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              className="key-input"
+                              placeholder={t("pressKey")}
+                              onKeyDown={(event) => handleKeyDown(event, name)}
+                              autoFocus
+                            />
+                          ) : <span className="key-display">{config?.label || "-"}</span>}
+                        </td>
+                        <td className="shortcut-actions">
+                          <button type="button" className={`edit-button ${isEditing ? "active" : ""}`} onClick={() => setEditingKey(isEditing ? null : name)}>
+                            {isEditing ? t("cancel") : t("change")}
+                          </button>
+                          <button type="button" className="edit-button reset-shortcut-button" onClick={() => handleResetShortcut(name)}>
+                            {t("reset")}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <button type="button" className="ghost-button settings-reset-shortcuts" onClick={handleResetShortcuts}>
+              {t("resetShortcuts")}
+            </button>
+          </section>}
+
+          {/* Source import settings. */}
+          {activeTab === "import" && <section className="settings-section settings-tab-panel">
+            <h3>{t("importSettings")}</h3>
+            <label className="settings-checkbox">
+              <input
+                type="checkbox"
+                checked={draft.backupSourceOnImport}
+                onChange={(event) => updateDraft("backupSourceOnImport", event.target.checked)}
+              />
+              {t("backupSourceOnImport")}
+            </label>
+          </section>}
+
+          {/* Video export settings. */}
           {activeTab === "export" && <section className="settings-section settings-tab-panel">
             <h3>{t("exportSettings")}</h3>
             <label className="settings-field">
@@ -219,94 +331,8 @@ export default function SettingsModal({
               {t("normalizeAudio")}
             </label>
           </section>}
-
-          {activeTab === "logs" && <section className="settings-section settings-tab-panel">
-            <h3>{t("logSettings")}</h3>
-            <p className="settings-description">{t("logSettingsDescription")}</p>
-            <div className="settings-log-options">
-              {OPERATION_TYPES.map((operationType) => (
-                <label className="settings-checkbox" key={operationType}>
-                  <input
-                    type="checkbox"
-                    checked={!draft.excludedOperationTypes.includes(operationType)}
-                    onChange={() => toggleOperationType(operationType)}
-                  />
-                  {operationLabels[operationType]}{t("recordAction")}
-                </label>
-              ))}
-            </div>
-          </section>}
-
-          {activeTab === "shortcuts" && <section className="settings-section settings-tab-panel">
-            <h3>{t("shortcut")}</h3>
-            <p className="settings-description">{t("shortcutDescription")}</p>
-            {conflicts.length > 0 && (
-              <div className="conflict-warning">
-                <strong>{t("shortcutConflict")}</strong>
-                <ul>
-                  {conflicts.map((conflict) => (
-                    <li key={conflict.key}>
-                      「{conflict.key}」: {conflict.actions.map((action) => getShortcutDescription(action)).join(", ")}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <div className="shortcut-table-wrapper">
-              <table className="shortcut-table">
-                <thead>
-                  <tr>
-                    <th>{t("function")}</th>
-                    <th>{t("currentKey")}</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shortcutNames.map((name) => {
-                    const config = shortcuts[name];
-                    const isEditing = editingKey === name;
-                    const hasConflict = conflicts.some((conflict) => conflict.actions.includes(name));
-                    return (
-                      <tr key={name} className={`shortcut-row ${hasConflict ? "has-conflict" : ""}`}>
-                        <td className="shortcut-name">
-                          <span>{getShortcutDescription(name)}</span>
-                          {hasConflict && <span className="conflict-badge">{t("duplicate")}</span>}
-                        </td>
-                        <td className="shortcut-key">
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              className="key-input"
-                              placeholder={t("pressKey")}
-                              onKeyDown={(event) => handleKeyDown(event, name)}
-                              autoFocus
-                            />
-                          ) : <span className="key-display">{config?.label || "-"}</span>}
-                        </td>
-                        <td className="shortcut-actions">
-                          <button type="button" className={`edit-button ${isEditing ? "active" : ""}`} onClick={() => setEditingKey(isEditing ? null : name)}>
-                            {isEditing ? t("cancel") : t("change")}
-                          </button>
-                          <button type="button" className="edit-button reset-shortcut-button" onClick={() => handleResetShortcut(name)}>
-                            {t("reset")}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <button type="button" className="ghost-button settings-reset-shortcuts" onClick={handleResetShortcuts}>
-              {t("resetShortcuts")}
-            </button>
-          </section>}
         </div>
-
-        <footer className="settings-modal-actions">
-          <button type="button" className="ghost-button" onClick={onClose}>{t("cancel")}</button>
-          <button type="button" onClick={handleSave}>{t("save")}</button>
-        </footer>
+        
       </div>
     </div>
   );
