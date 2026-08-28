@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import os from "node:os";
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Notification } from "electron";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -788,6 +788,23 @@ function sendExportProgress(progressUpdate) {
   mainWindow.webContents.send(EXPORT_PROGRESS_CHANNEL, progressUpdate);
 }
 
+function notifyExportComplete(outputPaths) {
+  if (!Notification.isSupported()) {
+    return;
+  }
+
+  try {
+    const fileCount = outputPaths.length;
+    const body = `${fileCount} 個のファイルを出力しました。`;
+    new Notification({
+      title: "Video Editing",
+      body
+    }).show();
+  } catch (error) {
+    console.warn("Export completion notification could not be shown.", error);
+  }
+}
+
 async function probeVideo(filePath) {
   if (!ffprobeBinary) {
     throw new Error("ffprobe-static が見つかりません。");
@@ -1249,15 +1266,12 @@ async function createMainWindow() {
     return probeVideo(String(filePath || ""));
   });
   ipcMain.handle("editor:select-output", async (_event, payload) => pickOutputVideo(payload?.suggestedName || "edited-video.mp4"));
-  ipcMain.handle("editor:export-video", async (_event, payload) => exportVideo(payload));
-  ipcMain.handle("editor:cancel-export", async () => cancelActiveExport());
-  ipcMain.handle("editor:reveal-in-folder", async (_event, payload) => {
-    const target = typeof payload === "string" ? payload : payload?.filePath;
-    if (target) {
-      shell.showItemInFolder(target);
-    }
-    return { filePath: String(target || "") };
+  ipcMain.handle("editor:export-video", async (_event, payload) => {
+    const result = await exportVideo(payload);
+    notifyExportComplete(result.outputPaths || [result.outputPath]);
+    return result;
   });
+  ipcMain.handle("editor:cancel-export", async () => cancelActiveExport());
 
   mainWindow.on("closed", () => {
     mainWindow = null;
