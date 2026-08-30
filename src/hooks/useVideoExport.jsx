@@ -83,7 +83,6 @@ export default function useVideoExport({
           audioNormalize
         })]);
       }
-      await editorApi.revealInFolder(outputPaths[0]);
     } catch (error) {
       if (error?.code === "EXPORT_CANCELLED" || error?.message === "EXPORT_CANCELLED") {
         messages.setStatusMessage(t("exportCancelled"));

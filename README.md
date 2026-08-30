@@ -1,6 +1,6 @@
 # VideoEditing – Local Video Editor
 
-A desktop video editor for crop, trim, and timeline editing. Built with Electron + React + FFmpeg. All processing happens locally—no cloud uploads, no data transmission. Open source for transparency.
+A desktop video editor for crop, trim, and timeline editing. Built with Electron + React + Go + FFmpeg. All processing happens locally—no cloud uploads, no data transmission. Open source for transparency.
 
 ## Why this application?
 
@@ -26,6 +26,7 @@ Disabling **Keep original resolution after crop** exports at the crop's actual r
 
 ```bash
 npm install
+npm run build:exporter
 npm run dev
 ```
 

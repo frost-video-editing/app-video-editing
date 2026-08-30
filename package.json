@@ -10,15 +10,17 @@
     "react:build": "vite build",
     "ui:check": "playwright test",
     "start": "electron .",
+    "build:exporter": "cd go && go build -o video-exporter.exe .",
+    "build:exporter:mac": "cd go && go build -o video-exporter .",
     "dev": "concurrently \"npm run react:start\" \"wait-on tcp:5173 && electron .\"",
     "move:exe": "node --input-type=commonjs -e \"const fs=require('fs');const path=require('path');const root=process.cwd();const release=path.join(root,'release');if(!fs.existsSync(release)) process.exit(0);for(const name of ['AMM-Setup-x64.exe','AMM-Setup-ia32.exe']){const target=path.join(root,name);if(fs.existsSync(target)) fs.rmSync(target,{force:true});}const files=fs.readdirSync(release);for(const f of files){const m=f.match(/^AMM-Setup-.*-(x64|ia32)\\.exe$/i);if(m){const dest=path.join(root,'AMM-Setup-'+m[1]+'.exe');fs.copyFileSync(path.join(release,f),dest);console.log('Copied release/'+f+' -> '+path.basename(dest));}}console.log('Portable app folders are available in release/win-unpacked and release/win-ia32-unpacked');\"",
     "bring:exe": "npm run move:exe",
-    "dist:win": "npm run react:build && electron-builder --publish never --win nsis --x64",
-    "dist:win32": "npm run react:build && electron-builder --publish never --win nsis --ia32 --config.win.artifactName=VideoEditing-${version}-x86.${ext}",
-    "dist:win:all": "npm run react:build && electron-builder --publish never --win nsis --x64 && electron-builder --publish never --win nsis --ia32 --config.win.artifactName=VideoEditing-${version}-x86.${ext}",
-    "dist:mac": "npm run react:build && electron-builder --publish never --mac --x64",
-    "dist:mac:arm64": "npm run react:build && electron-builder --publish never --mac --arm64",
-    "dist:mac:all": "npm run react:build && electron-builder --publish never --mac --x64 --arm64",
+    "dist:win": "npm run build:exporter && npm run react:build && electron-builder --publish never --win nsis --x64",
+    "dist:win32": "npm run build:exporter && npm run react:build && electron-builder --publish never --win nsis --ia32 --config.win.artifactName=VideoEditing-${version}-x86.${ext}",
+    "dist:win:all": "npm run build:exporter && npm run react:build && electron-builder --publish never --win nsis --x64 && electron-builder --publish never --win nsis --ia32 --config.win.artifactName=VideoEditing-${version}-x86.${ext}",
+    "dist:mac": "npm run build:exporter:mac && npm run react:build && electron-builder --publish never --mac --x64",
+    "dist:mac:arm64": "npm run build:exporter:mac && npm run react:build && electron-builder --publish never --mac --arm64",
+    "dist:mac:all": "npm run build:exporter:mac && npm run react:build && electron-builder --publish never --mac --x64 --arm64",
     "dist:all": "npm run dist:win:all && echo macOS release files are built in GitHub Actions or on a macOS machine with npm run dist:mac:all",
     "dist:dir": "npm run react:build && electron-builder --dir",
     "android:build": "npm run react:build && npx cap copy android && npx cap open android",
@@ -60,12 +62,28 @@
     "files": [
       "Desktop/electron/**/*",
       "dist/**/*",
+      "go/video-exporter*",
       "package.json"
     ],
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*",
       "node_modules/ffmpeg-static/**/*",
-      "node_modules/ffprobe-static/**/*"
+      "node_modules/ffprobe-static/**/*",
+      "go/video-exporter*"
+    ],
+    "extraResources": [
+      {
+        "from": "go/video-exporter.exe",
+        "to": "go/video-exporter.exe"
+      },
+      {
+        "from": "node_modules/ffmpeg-static/ffmpeg.exe",
+        "to": "ffmpeg/ffmpeg.exe"
+      },
+      {
+        "from": "node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe",
+        "to": "ffprobe/ffprobe.exe"
+      }
     ],
     "directories": {
       "output": "release"

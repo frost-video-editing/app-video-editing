@@ -43,6 +43,7 @@ export default function useExportDialogActions({
 
 // Subscribes to Electron export progress events and owns their display state.
 export function useExportProgress(editorApi) {
+  const { t } = useLanguage();
   const exportStartTimeRef = useRef(null);
   const [exportProgress, setExportProgress] = useState(0);
   const [exportMessage, setExportMessage] = useState("");
@@ -52,10 +53,20 @@ export function useExportProgress(editorApi) {
   useEffect(() => {
     if (!editorApi?.onExportProgress) return undefined;
     return editorApi.onExportProgress((payload = {}) => {
+      const currentSegment = Number(payload.currentSegment) - 1;
+      const currentSegmentProgress = Number(payload.currentSegmentProgress);
       setExportMessage(payload.message || t("exporting"));
       setExportProgress(Number(payload.progress) || 0);
       setExportIndeterminate(Boolean(payload.indeterminate));
-      setExportSegments(Array.isArray(payload.segments) ? payload.segments : null);
+      setExportSegments((previous) => {
+        if (Array.isArray(payload.segments)) return payload.segments;
+        if (!Number.isInteger(currentSegment) || currentSegment < 0 || !Number.isFinite(currentSegmentProgress)) {
+          return previous;
+        }
+        const next = Array.isArray(previous) ? [...previous] : [];
+        next[currentSegment] = currentSegmentProgress;
+        return next;
+      });
     });
   }, [editorApi]);
 

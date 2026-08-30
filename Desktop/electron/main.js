@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import os from "node:os";
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Notification } from "electron";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,9 +56,19 @@ function getUnpackedBinaryPath(binaryPath) {
   return binaryPath.replace(asarSegment, `${path.sep}app.asar.unpacked${path.sep}`);
 }
 
-const ffmpegBinary = resolveBinaryPath(ffmpegStatic);
-const ffprobeBinary = resolveBinaryPath(ffprobeStatic);
-let preferredH264EncoderPromise = null;
+function resolveBundledBinary(binary, packageName, ...binaryParts) {
+  const resolvedPath = resolveBinaryPath(binary);
+  const candidates = [
+    path.join(process.resourcesPath, packageName === "ffmpeg-static" ? "ffmpeg" : "ffprobe", binaryParts.at(-1)),
+    resolvedPath,
+    path.join(process.resourcesPath, "app.asar.unpacked", "node_modules", packageName, ...binaryParts),
+    path.join(process.resourcesPath, "node_modules", packageName, ...binaryParts)
+  ].filter(Boolean);
+  return candidates.find((candidate) => fs.existsSync(candidate)) || resolvedPath;
+}
+
+const ffmpegBinary = resolveBundledBinary(ffmpegStatic, "ffmpeg-static", "ffmpeg.exe");
+const ffprobeBinary = resolveBundledBinary(ffprobeStatic, "ffprobe-static", "bin", "ffprobe.exe");
 
 function runCommand(binary, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -161,35 +171,6 @@ function runCommand(binary, args, options = {}) {
 
     startProcess(resolveBinaryPath(binary), true);
   });
-}
-
-function getPreferredH264Encoder() {
-  if (!preferredH264EncoderPromise) {
-    preferredH264EncoderPromise = runCommand(ffmpegBinary, ["-hide_banner", "-encoders"])
-      .then(({ stdout, stderr }) => {
-        const encoders = `${stdout}\n${stderr}`;
-        const hardwareEncoders = [
-          ["h264_nvenc", "NVIDIA NVENC"],
-          ["h264_qsv", "Intel Quick Sync Video"],
-          ["h264_amf", "AMD AMF"]
-        ];
-
-        for (const [encoder, label] of hardwareEncoders) {
-          if (new RegExp(`\\b${encoder}\\b`).test(encoders)) {
-            console.info(`Using ${label} for video export when the GPU is available.`);
-            return encoder;
-          }
-        }
-
-        return "libx264";
-      })
-      .catch((error) => {
-        console.warn("Unable to detect a hardware H.264 encoder; using CPU encoding.", error);
-        return "libx264";
-      });
-  }
-
-  return preferredH264EncoderPromise;
 }
 
 function parseFfmpegProgressTime(progressState) {
@@ -788,6 +769,23 @@ function sendExportProgress(progressUpdate) {
   mainWindow.webContents.send(EXPORT_PROGRESS_CHANNEL, progressUpdate);
 }
 
+function notifyExportComplete(outputPaths) {
+  if (!Notification.isSupported()) {
+    return;
+  }
+
+  try {
+    const fileCount = outputPaths.length;
+    const body = `${fileCount} 個のファイルを出力しました。`;
+    new Notification({
+      title: "Video Editing",
+      body
+    }).show();
+  } catch (error) {
+    console.warn("Export completion notification could not be shown.", error);
+  }
+}
+
 async function probeVideo(filePath) {
   if (!ffprobeBinary) {
     throw new Error("ffprobe-static が見つかりません。");
@@ -876,7 +874,7 @@ async function pickOutputVideo(suggestedName = "edited-video.mp4") {
   return { filePath: result.filePath };
 }
 
-async function exportVideo(payload = {}) {
+async function exportVideoLegacy(payload = {}) {
   if (!ffmpegBinary) {
     throw new Error("ffmpeg-static が見つかりません。");
   }
@@ -918,7 +916,7 @@ async function exportVideo(payload = {}) {
   };
   const hasAudioAdjustments = (Number.isFinite(audioOptions.gainPercent) && Number(audioOptions.gainPercent) !== 100) || audioOptions.normalize;
   const needsVideoEncode = cropFilter || hasAudioAdjustments;
-  const videoEncoder = needsVideoEncode ? await getPreferredH264Encoder() : "libx264";
+  const videoEncoder = "libx264";
   const validSegments = segments
     .map((segment) => {
       const start = Math.max(0, Number(segment.start) || 0);
@@ -1222,6 +1220,85 @@ async function exportVideo(payload = {}) {
   return { outputPath };
 }
 
+// invoke the Go video exporter
+function getGoExporterPath() {
+  const executableName = process.platform === "win32" ? "video-exporter.exe" : "video-exporter";
+  const unpackedResourcesPath = process.resourcesPath.replace(
+    `${path.sep}app.asar`,
+    `${path.sep}app.asar.unpacked`
+  );
+  const candidates = [
+    path.join(process.resourcesPath, "app.asar.unpacked", "go", executableName),
+    path.join(unpackedResourcesPath, "go", executableName),
+    path.join(process.resourcesPath, "go", executableName),
+    path.join(app.getAppPath(), "go", executableName),
+    path.join(__dirname, "..", "..", "go", executableName)
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+async function exportVideo(payload = {}) {
+  const exporterPath = getGoExporterPath();
+  if (!exporterPath) {
+    throw new Error("Go版の動画出力エンジンが見つかりません。先に npm run build:exporter を実行してください。");
+  }
+
+  const sourcePath = String(payload.sourcePath || "");
+  const outputPath = String(payload.outputPath || "");
+  const segments = Array.isArray(payload.segments) ? payload.segments : [];
+  if (!sourcePath || !outputPath || !segments.length) {
+    throw new Error("出力に必要な情報が足りません。");
+  }
+
+  exportCancellationRequested = false;
+  return new Promise((resolve, reject) => {
+    const child = spawn(exporterPath, [], {
+      windowsHide: true,
+      shell: false,
+      env: { ...process.env, FFMPEG_PATH: ffmpegBinary || "" }
+    });
+    activeFfmpegProcesses.add(child);
+    let pendingOutput = "";
+    let stderr = "";
+    let settled = false;
+
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      activeFfmpegProcesses.delete(child);
+      callback(value);
+    };
+
+    child.stdout.on("data", (chunk) => {
+      pendingOutput += chunk.toString();
+      const lines = pendingOutput.split(/\r?\n/);
+      pendingOutput = lines.pop() || "";
+      for (const line of lines) {
+        try {
+          const message = JSON.parse(line);
+          if (message.type === "progress") sendExportProgress(message);
+          if (message.type === "result") finish(resolve, message);
+          if (message.type === "error") finish(reject, new Error(message.message || "動画出力に失敗しました。"));
+        } catch {
+          // Ignore incomplete runner output.
+        }
+      }
+    });
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    child.on("error", (error) => finish(reject, error));
+    child.on("close", (code) => {
+      if (settled) return;
+      if (exportCancellationRequested) {
+        finish(reject, createExportCancelledError());
+      } else {
+        finish(reject, new Error(stderr.trim() || `Go export failed with exit code ${code}`));
+      }
+    });
+
+    child.stdin.end(JSON.stringify(payload));
+  });
+}
+
 async function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -1249,15 +1326,12 @@ async function createMainWindow() {
     return probeVideo(String(filePath || ""));
   });
   ipcMain.handle("editor:select-output", async (_event, payload) => pickOutputVideo(payload?.suggestedName || "edited-video.mp4"));
-  ipcMain.handle("editor:export-video", async (_event, payload) => exportVideo(payload));
-  ipcMain.handle("editor:cancel-export", async () => cancelActiveExport());
-  ipcMain.handle("editor:reveal-in-folder", async (_event, payload) => {
-    const target = typeof payload === "string" ? payload : payload?.filePath;
-    if (target) {
-      shell.showItemInFolder(target);
-    }
-    return { filePath: String(target || "") };
+  ipcMain.handle("editor:export-video", async (_event, payload) => {
+    const result = await exportVideo(payload);
+    notifyExportComplete(result.outputPaths || [result.outputPath]);
+    return result;
   });
+  ipcMain.handle("editor:cancel-export", async () => cancelActiveExport());
 
   mainWindow.on("closed", () => {
     mainWindow = null;
