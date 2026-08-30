@@ -108,12 +108,12 @@ export default function useTimelineEditingActions({
     addOperationLog("cut");
   }, [addOperationLog, messages, playhead, pushUndoSnapshot, segments, setCutMarkers, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, totalDuration, t]);
 
-  const moveSegment = useCallback((index, direction) => {
-    const targetIndex = index + direction;
-    if (index < 0 || targetIndex < 0 || targetIndex >= segments.length) return;
+  const moveSegmentToIndex = useCallback((index, targetIndex) => {
+    if (index < 0 || index >= segments.length || targetIndex < 0 || targetIndex >= segments.length || index === targetIndex) return;
     pushUndoSnapshot();
     const nextSegments = [...segments];
-    [nextSegments[index], nextSegments[targetIndex]] = [nextSegments[targetIndex], nextSegments[index]];
+    const [movedSegment] = nextSegments.splice(index, 1);
+    nextSegments.splice(targetIndex, 0, movedSegment);
     let nextStart = 0;
     for (let segmentIndex = 0; segmentIndex < targetIndex; segmentIndex += 1) {
       nextStart += segmentDuration(nextSegments[segmentIndex]);
@@ -127,6 +127,31 @@ export default function useTimelineEditingActions({
     messages.setStatusMessage(t("partMoved", targetIndex + 1));
     messages.clearErrorOnly();
   }, [messages, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectedSegmentIndex, setSelectionEnd, setSelectionStart, t]);
+
+  // move a segment to a different position in the timeline on UI
+  const moveSegment = useCallback((index, direction) => {
+    moveSegmentToIndex(index, index + direction);
+  }, [moveSegmentToIndex]);
+
+  const moveSegmentToTimelinePosition = useCallback((index, timelinePosition) => {
+    if (index < 0 || index >= segments.length) return;
+
+    const remaining = segments.filter((_, segmentIndex) => segmentIndex !== index);
+    const dropTime = clamp(Number(timelinePosition) || 0, 0, timelineDuration(segments));
+    let cursor = 0;
+    let targetIndex = remaining.length;
+    for (let remainingIndex = 0; remainingIndex < remaining.length; remainingIndex += 1) {
+      const duration = segmentDuration(remaining[remainingIndex]);
+      if (dropTime <= cursor + duration / 2) {
+        targetIndex = remainingIndex;
+        break;
+      }
+      cursor += duration;
+    }
+
+    if (targetIndex === index) return;
+    moveSegmentToIndex(index, targetIndex);
+  }, [moveSegmentToIndex, segments]);
 
   const handlePaste = useCallback(() => {
     if (!clipboard.length) {
@@ -159,7 +184,7 @@ export default function useTimelineEditingActions({
     messages.clearErrorOnly();
   }, [messages, playhead, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, t]);
 
-  return { handleCopy, handleDelete, handleDeleteSegment, handleCut, moveSegment, handlePaste, handleInsertClip };
+  return { handleCopy, handleDelete, handleDeleteSegment, handleCut, moveSegment, moveSegmentToIndex, moveSegmentToTimelinePosition, handlePaste, handleInsertClip };
 }
 
 

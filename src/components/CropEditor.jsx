@@ -125,7 +125,6 @@ export default function CropEditor({
             {previewPlaybackRate === 1 ? t("slow") : t("normal")}
           </button>
           <span className="preview-transport__time">{previewCurrentTime} / {duration}</span>
-          <span className="preview-transport__hint">{t("timelineHint")}</span>
         </div>
       ) : null}
 

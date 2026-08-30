@@ -519,6 +519,13 @@ input[type="range"] {
   border-radius: 16px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+
+.timeline-item--selected {
+  border-color: var(--accent);
+  background: rgba(76, 201, 240, 0.12);
+  box-shadow: 0 0 0 2px rgba(76, 201, 240, 0.18);
 }
 
 .timeline-index {
@@ -563,6 +570,61 @@ input[type="range"] {
   padding: 18px 16px;
   border-radius: 16px;
   border: 1px dashed var(--line-strong);
+}
+
+.clip-bank-panel {
+  display: grid;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.clip-bank-list {
+  display: grid;
+  gap: 8px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.clip-bank-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.clip-bank-item > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.clip-bank-item span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.timeline-boundary-handle {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  z-index: 3;
+  width: 12px;
+  margin-left: -6px;
+  padding: 0;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(76, 201, 240, 0.16);
+  pointer-events: auto;
+  cursor: ew-resize;
+}
+
+.timeline-boundary-handle:hover {
+  background: var(--accent-2);
 }
 
 .error-message {
@@ -892,7 +954,7 @@ input[type="range"] {
 
 .timeline-track {
   position: relative;
-  height: 56px;
+  height: 72px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -918,24 +980,102 @@ input[type="range"] {
 
 .timeline-segments {
   position: absolute;
-  inset: 7px;
+  top: 24px;
+  right: 7px;
+  bottom: 7px;
+  left: 7px;
   display: flex;
   gap: 6px;
-  pointer-events: none;
+  pointer-events: auto;
   z-index: 2;
 }
 
 .timeline-segment-block {
+  position: relative;
   min-width: 4px;
   border-radius: 8px;
   background: linear-gradient(180deg, rgba(148, 163, 184, 0.34), rgba(100, 116, 139, 0.5));
   border: 1px solid rgba(191, 219, 254, 0.18);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+}
+
+.timeline-segment-number {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.96);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.72);
+  pointer-events: none;
+}
+
+.timeline-segment-block:nth-child(4n + 1) {
+  background: linear-gradient(180deg, rgba(45, 212, 191, 0.8), rgba(13, 148, 136, 0.72));
+  border-color: rgba(153, 246, 228, 0.55);
+}
+
+.timeline-segment-block:nth-child(4n + 2) {
+  background: linear-gradient(180deg, rgba(251, 191, 36, 0.86), rgba(217, 119, 6, 0.76));
+  border-color: rgba(254, 243, 199, 0.58);
+}
+
+.timeline-segment-block:nth-child(4n + 3) {
+  background: linear-gradient(180deg, rgba(244, 114, 182, 0.82), rgba(190, 24, 93, 0.72));
+  border-color: rgba(251, 207, 232, 0.55);
+}
+
+.timeline-segment-block:nth-child(4n + 4) {
+  background: linear-gradient(180deg, rgba(129, 140, 248, 0.84), rgba(79, 70, 229, 0.72));
+  border-color: rgba(224, 231, 255, 0.55);
+}
+
+.timeline-adjustment-lane {
+  position: absolute;
+  top: 0;
+  right: 7px;
+  left: 7px;
+  height: 20px;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.timeline-adjustment-handle {
+  position: absolute;
+  top: 2px;
+  width: 12px;
+  height: 18px;
+  transform: translateX(-50%);
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(76, 201, 240, 0.16);
+  pointer-events: auto;
+  cursor: ew-resize;
+}
+
+.timeline-adjustment-handle:hover {
+  background: var(--accent-2);
 }
 
 .timeline-segment-block--selected {
-  outline: 2px solid rgba(76, 201, 240, 0.9);
-  box-shadow: 0 0 8px rgba(76, 201, 240, 0.35), inset 0 1px 0 rgba(255,255,255,0.12);
+  z-index: 3;
+  transform: translateY(-3px) scaleY(1.08);
+  filter: brightness(1.16) saturate(1.12);
+  outline: 2px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.32), 0 0 0 3px rgba(76, 201, 240, 0.72), 0 0 14px rgba(76, 201, 240, 0.58), inset 0 1px 0 rgba(255,255,255,0.24);
+}
+
+.timeline-segment-block--dragging {
+  position: relative;
+  z-index: 3;
+  transform: translateY(-4px) scaleY(1.12);
+  filter: brightness(1.2) saturate(1.15);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.38), 0 0 0 2px rgba(255, 255, 255, 0.7), 0 0 14px rgba(76, 201, 240, 0.75);
 }
 
 .timeline-selection {

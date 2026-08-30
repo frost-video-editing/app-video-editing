@@ -370,6 +370,8 @@ export default function VideoEditorApp() {
     handleDeleteSegment,
     handleCut,
     moveSegment,
+    moveSegmentToIndex,
+    moveSegmentToTimelinePosition,
     handlePaste,
     handleInsertClip
   } = useTimelineEditingActions({
@@ -671,6 +673,7 @@ export default function VideoEditorApp() {
             onSegmentClick={(_segment, index) => setSelectedSegmentIndex(index)}
             selectedSegmentIndex={selectedSegmentIndex}
             onMoveSegment={moveSegment}
+            onSegmentDrop={moveSegmentToTimelinePosition}
           />
 
       {/* Audio controls for preview/editing (moved from export dialog) */}
@@ -767,8 +770,23 @@ export default function VideoEditorApp() {
           <TimelinePanel
             t={t}
             segments={segments}
+            clipBank={clipBank}
+            selectedSegmentIndex={selectedSegmentIndex}
             isExporting={isExporting}
             onDeleteSegment={handleDeleteSegment}
+            onMoveSegmentToIndex={moveSegmentToIndex}
+            onInsertClip={handleInsertClip}
+            onSelectSegment={(index) => {
+              if (index < 0 || index >= segments.length) return;
+              const start = segments
+                .slice(0, index)
+                .reduce((total, segment) => total + segmentDuration(segment), 0);
+              const end = start + segmentDuration(segments[index]);
+              setSelectedSegmentIndex(index);
+              setSelectionStart(start);
+              setSelectionEnd(end);
+              setPlayheadWithPreview(start);
+            }}
           />
 
           <section className="side-section export-panel">
