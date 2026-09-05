@@ -88,12 +88,20 @@ export default function useVideoExport({
         audioOnly: Boolean(audioOnly)
       });
       const outputPaths = Array.isArray(result?.outputPaths) && result.outputPaths.length ? result.outputPaths : [chosenOutput];
+      const exportDurationSeconds = exportStartTimeRef.current
+        ? (Date.now() - exportStartTimeRef.current) / 1000
+        : null;
+      const outputDurations = safeSegments.map((segment) => segmentDuration(segment));
       messages.setStatusMessage(t("exportComplete", outputPaths.length));
       if (isOperationTypeEnabled("export")) {
         setOperationLogs((current) => [...current, createExportLog(sourceName, chosenOutput, safeSegments.length, metadata, {
           crop: normalizedCrop,
           audioGainPercent,
-          audioNormalize
+          audioNormalize,
+          outputFileCount: outputPaths.length,
+          exportDurationSeconds,
+          outputDurations,
+          totalOutputDuration: outputDurations.reduce((total, duration) => total + duration, 0)
         })]);
       }
     } catch (error) {
