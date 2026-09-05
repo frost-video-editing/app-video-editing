@@ -202,6 +202,9 @@ export function usePreviewPlayback({
 
     try {
       if (video.paused) {
+        if (audioContextRef.current?.state === "suspended") {
+          await audioContextRef.current.resume();
+        }
         await video.play();
         setIsPreviewPlaying(true);
       } else {
@@ -254,6 +257,22 @@ export function usePreviewPlayback({
     } catch (error) {
       logError("usePreviewPlayback.audio.init", error);
     }
+  }, [sourceUrl, videoRef]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return undefined;
+
+    const resumeAudioContext = () => {
+      if (audioContextRef.current?.state === "suspended") {
+        audioContextRef.current.resume().catch((error) => {
+          logError("usePreviewPlayback.audio.resume", error);
+        });
+      }
+    };
+
+    video.addEventListener("play", resumeAudioContext);
+    return () => video.removeEventListener("play", resumeAudioContext);
   }, [sourceUrl, videoRef]);
 
   useEffect(() => {

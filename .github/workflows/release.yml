@@ -2,18 +2,35 @@ name: Release
 
 "on":
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
+  release-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Extract version from commit message
+        id: version
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        shell: bash
+        run: |
+          version=$(printf '%s' "$COMMIT_MESSAGE" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   build-check:
     uses: ./.github/workflows/build-check.yml
+    needs: release-version
+    if: needs.release-version.outputs.version != ''
 
   release-windows:
-    needs: build-check
+    needs: [release-version, build-check]
+    if: needs.release-version.outputs.version != ''
     runs-on: windows-latest
 
     steps:
@@ -34,9 +51,10 @@ jobs:
       - name: Upload installers to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ needs.release-version.outputs.version }}
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = $env:RELEASE_VERSION
           $x64  = Get-Item "release\VideoEditing-*-x64.exe"  | Select-Object -First 1
           $x86 = Get-Item "release\VideoEditing-*-x86.exe"  | Select-Object -First 1
 

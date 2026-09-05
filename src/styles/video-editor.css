@@ -16,6 +16,24 @@
   --shadow: 0 18px 34px rgba(0, 0, 0, 0.28);
 }
 
+.app-error-screen {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 48px;
+  color: var(--text);
+  background: var(--bg-0);
+}
+
+.app-error-screen pre {
+  max-width: 900px;
+  padding: 16px;
+  overflow: auto;
+  color: #ffd6d6;
+  background: #321b22;
+  border: 1px solid #9b4b58;
+  white-space: pre-wrap;
+}
+
 * {
   box-sizing: border-box;
 }
