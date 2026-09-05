@@ -53,6 +53,7 @@ export default function VideoEditorApp() {
   const [sourceUrl, setSourceUrl] = useState("");
   const [sourceName, setSourceName] = useState("");
   const [sources, setSources] = useState([]);
+  const sourcePathsRef = useRef(new Set());
 
   const [metadata, setMetadata] = useState({ duration: 0, width: 0, height: 0, hasAudio: false });
   const [segments, setSegments] = useState([]);
@@ -292,15 +293,16 @@ export default function VideoEditorApp() {
     stopLoadingOverlay
   } = useLoadingOverlay();
   const registerSource = useCallback((source) => {
-    if (sources.some((item) => item.filePath === source.filePath)) {
+    if (sourcePathsRef.current.has(source.filePath)) {
       showTimelineToast(t("sameFile"), "error");
       return false;
     }
+    sourcePathsRef.current.add(source.filePath);
     setSources((current) => {
       return [...current, { ...source, id: source.filePath }];
     });
     return true;
-  }, [showTimelineToast, sources, t]);
+  }, [showTimelineToast, t]);
   const { loadSource, handleChooseSource } = useSourceLoader({
     editorApi,
     setSourcePath,
@@ -336,6 +338,7 @@ export default function VideoEditorApp() {
     loadSource(source);
   };
   const handleRemoveSource = (source) => {
+    sourcePathsRef.current.delete(source.filePath);
     setSources((current) => current.filter((item) => item.filePath !== source.filePath));
     if (source.filePath !== sourcePath) return;
     const remainingSource = sources.find((item) => item.filePath !== source.filePath);
@@ -355,6 +358,24 @@ export default function VideoEditorApp() {
     setOutputPath("");
     setCrop(emptyCrop);
     resetCropSelection();
+  };
+  const handleAddSourceToTimeline = (source) => {
+    const duration = Math.max(0.1, Number(source.info?.duration) || (source.mediaType === "image" ? 5 : 0));
+    if (!duration) {
+      showTimelineToast(t("mediaHasNoDuration"), "error");
+      return;
+    }
+    setSegments((current) => [...current, {
+      start: 0,
+      end: duration,
+      mediaType: source.mediaType,
+      mimeType: source.info?.mimeType,
+      filePath: source.filePath,
+      fileUrl: source.fileUrl,
+      fileName: source.fileName,
+      sourceId: source.id
+    }]);
+    showTimelineToast(t("addedToTimeline", source.fileName));
   };
   const { handleChooseOutput, handleChooseOutputFolder, handleOpenExportConfirm, handleCloseExportConfirm } = useExportDialogActions({
     editorApi,
@@ -555,6 +576,8 @@ export default function VideoEditorApp() {
         onClearLogs={() => {
           clearOperationLogs();
         }}
+        language={language}
+        t={t}
       />
     );
   }
@@ -635,8 +658,10 @@ export default function VideoEditorApp() {
       <section className="hero card">
         <div className="hero-head">
           <div>
-            <p className="eyebrow">Video Editing Studio</p>
-            <h1>Video Editor</h1>
+            <h1 className="brand-title">
+              <span className="brand-title-icon" aria-hidden="true">❄</span>
+              <span>Frosty Editor</span>
+            </h1>
             <p>{status}</p>
           </div>
 
@@ -676,6 +701,8 @@ export default function VideoEditorApp() {
               onOpen={() => setIsShowingLogViewer(true)}
               onClose={() => setIsShowingLogViewer(false)}
               onClearLogs={() => setOperationLogs([])}
+              language={language}
+              t={t}
             />
           </div>
         </div>
@@ -686,7 +713,7 @@ export default function VideoEditorApp() {
           activeSourcePath={sourcePath}
           onSelect={handleSelectSource}
           onRemove={handleRemoveSource}
-          onAdd={handleChooseSource}
+          onAdd={handleAddSourceToTimeline}
           t={t}
         />
       </section>

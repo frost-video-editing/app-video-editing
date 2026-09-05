@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   clamp,
   createFullTimeline,
@@ -41,6 +41,7 @@ export default function useTimelineEditingActions({
   showToast = () => {}
 }) {
   const { t } = useLanguage();
+  const deletionTimersRef = useRef(new Set());
   const handleCopy = useMemo(() => {
     const copySelection = createHandleCopySelection({
       segments,
@@ -74,20 +75,27 @@ export default function useTimelineEditingActions({
 
   const handleDeleteSegment = useCallback((index) => {
     if (index < 0 || index >= segments.length) return;
-    pushUndoSnapshot();
     const deletedSegment = segments[index];
-    const nextSegments = segments.filter((_, segmentIndex) => segmentIndex !== index);
-    const nextDuration = timelineDuration(nextSegments);
-    setTimelineParts((current) => [...current, deletedSegment]);
-    setSegments(nextSegments);
-    setSelectionStart((current) => clamp(current, 0, nextDuration));
-    setSelectionEnd((current) => clamp(current, 0, nextDuration));
-    setPlayheadWithPreview(clamp(playhead, 0, nextDuration));
-    messages.setStatusMessage(t("partDeleted", index + 1));
-    showToast(t("partRemovedFromTimeline"));
-    messages.clearErrorOnly();
-    addOperationLog("delete");
-  }, [addOperationLog, messages, playhead, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, setTimelineParts, showToast, t]);
+    const deletionKey = `segment:${deletedSegment}`;
+    if (deletionTimersRef.current.has(deletionKey)) return;
+    deletionTimersRef.current.add(deletionKey);
+    pushUndoSnapshot();
+    showToast(t("deletionScheduled"));
+    window.setTimeout(() => {
+      deletionTimersRef.current.delete(deletionKey);
+      setSegments((current) => {
+        const nextSegments = current.filter((segment) => segment !== deletedSegment);
+        const nextDuration = timelineDuration(nextSegments);
+        setSelectionStart((value) => clamp(value, 0, nextDuration));
+        setSelectionEnd((value) => clamp(value, 0, nextDuration));
+        setPlayheadWithPreview((value) => clamp(value, 0, nextDuration));
+        return nextSegments;
+      });
+      messages.setStatusMessage(t("partDeleted", index + 1));
+      messages.clearErrorOnly();
+      addOperationLog("delete");
+    }, 3000);
+  }, [addOperationLog, messages, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, showToast, t]);
 
   const handleInsertTimelinePart = useCallback((part, index) => {
     if (!part) return;
@@ -106,11 +114,19 @@ export default function useTimelineEditingActions({
   }, [addOperationLog, messages, playhead, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, setTimelineParts, showToast, t]);
 
   const handleDeleteTimelinePart = useCallback((index) => {
+    if (index < 0) return;
+    const deletionKey = `part:${index}`;
+    if (deletionTimersRef.current.has(deletionKey)) return;
+    deletionTimersRef.current.add(deletionKey);
     pushUndoSnapshot();
-    setTimelineParts((current) => current.filter((_, partIndex) => partIndex !== index));
-    messages.setStatusMessage(t("partRemoved"));
-    showToast(t("partRemoved"));
-    messages.clearErrorOnly();
+    showToast(t("deletionScheduled"));
+    window.setTimeout(() => {
+      deletionTimersRef.current.delete(deletionKey);
+      setTimelineParts((current) => current.filter((_, partIndex) => partIndex !== index));
+      messages.setStatusMessage(t("partRemoved"));
+      showToast(t("partRemoved"));
+      messages.clearErrorOnly();
+    }, 3000);
   }, [messages, pushUndoSnapshot, setTimelineParts, showToast, t]);
 
   const handleCut = useCallback(() => {

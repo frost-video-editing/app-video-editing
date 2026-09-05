@@ -151,34 +151,39 @@ enum BinaryKind {
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-async fn select_source(app: AppHandle) -> Result<Option<SelectSourceResponse>, String> {
+async fn select_source(app: AppHandle) -> Result<Vec<SelectSourceResponse>, String> {
     let app_for_dialog = app.clone();
     let file_path = tokio::task::spawn_blocking(move || {
         app_for_dialog
             .dialog()
             .file()
-            .set_title("動画を選択")
-            .add_filter("Video", &["mp4", "mov", "mkv", "webm", "m4v", "avi"])
+            .set_title("動画・画像・音声を選択")
+            .add_filter("Media", &[
+                "mp4", "mov", "mkv", "webm", "m4v", "avi",
+                "mp3", "wav", "m4a", "aac", "flac", "ogg",
+                "jpg", "jpeg", "png", "webp", "gif", "bmp",
+            ])
             .add_filter("All files", &["*"])
-            .blocking_pick_file()
+            .blocking_pick_files()
     })
     .await
     .map_err(|e| format!("dialog task failed: {e}"))?;
 
-    let Some(picked) = file_path else {
-        return Ok(None);
-    };
-
-    let path = filepath_to_pathbuf(picked).ok_or("Unsupported file path scheme")?;
-    let file_name = path
-        .file_name()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_default();
-
-    Ok(Some(SelectSourceResponse {
-        file_path: path.to_string_lossy().to_string(),
-        file_name,
-    }))
+    Ok(file_path
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(filepath_to_pathbuf)
+        .map(|path| {
+            let file_name = path
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            SelectSourceResponse {
+                file_path: path.to_string_lossy().to_string(),
+                file_name,
+            }
+        })
+        .collect())
 }
 
 #[tauri::command]

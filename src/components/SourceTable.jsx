@@ -26,6 +26,7 @@ export default function SourceTable({ sources, activeSourcePath, onSelect, onRem
             <tr>
               <th scope="col">{t("sourceNumber")}</th>
               <th scope="col">{t("fileName")}</th>
+              <th scope="col">{t("mediaType")}</th>
               <th scope="col">{t("duration")}</th>
               <th scope="col">{t("action")}</th>
             </tr>
@@ -33,7 +34,7 @@ export default function SourceTable({ sources, activeSourcePath, onSelect, onRem
           <tbody>
             {sources.length === 0 ? (
               <tr>
-                <td className="source-table-empty" colSpan="4">{t("noSources")}</td>
+                <td className="source-table-empty" colSpan="5">{t("noSources")}</td>
               </tr>
             ) : sources.map((source, index) => (
               <tr key={source.id} className={source.filePath === activeSourcePath ? "source-row--active" : ""}>
@@ -43,8 +44,12 @@ export default function SourceTable({ sources, activeSourcePath, onSelect, onRem
                     {source.fileName}
                   </button>
                 </td>
+                <td>{t(source.mediaType === "audio" ? "audioFile" : source.mediaType === "image" ? "imageFile" : "videoFile")}</td>
                 <td>{source.info?.duration ? formatSourceDuration(source.info.duration) : "00:00:00"}</td>
                 <td>
+                  <button type="button" className="ghost-button" onClick={() => onAdd(source)}>
+                    {t("addToTimeline")}
+                  </button>
                   <button type="button" className="ghost-button source-remove-button" onClick={() => onRemove(source)}>
                     {t("delete")}
                   </button>

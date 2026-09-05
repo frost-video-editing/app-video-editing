@@ -390,64 +390,65 @@ export function TimelinePanel({
         </div>
       </div>
 
-      {/* segment timeline visualizer could be added here if needed */}
-      <div className="timeline-list" onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleDrop(event, segments.length)}>
-        {timelineItems.map(({ segment, index, active }, itemIndex) => (
-          <div
-            className={`timeline-item${active && selectedSegmentIndex === index ? " timeline-item--selected" : ""}${active ? "" : " timeline-item--inactive"}`}
-            key={`${active ? "active" : "inactive"}-${segment.start}-${segment.end}-${index}`}
-            draggable={!isExporting}
-            onClick={() => active && onSelectSegment(index)}
-            onDragStart={(event) => {
-              setDraggedIndex(active ? index : null);
-              event.dataTransfer.setData(active ? "application/x-timeline-segment" : "application/x-timeline-part", String(index));
-            }}
-            onDragEnd={() => setDraggedIndex(null)}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => handleDrop(event, active ? index : segments.length)}
-          >
+      <div className="timeline-table-wrapper" onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleDrop(event, segments.length)}>
+        <table className="timeline-table">
+          <thead>
+            <tr>
+              <th scope="col">{t("sourceNumber")}</th>
+              <th scope="col">{t("timelineFile")}</th>
+              <th scope="col">{t("action")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {timelineItems.map(({ segment, index, active }, itemIndex) => (
+              <tr
+                className={active && selectedSegmentIndex === index ? "timeline-row--selected" : ""}
+                key={`${segment.sourceId || "active"}-${segment.start}-${segment.end}-${index}`}
+                draggable={!isExporting}
+                onClick={() => active && onSelectSegment(index)}
+                onDragStart={(event) => {
+                  setDraggedIndex(active ? index : null);
+                  event.dataTransfer.setData(active ? "application/x-timeline-segment" : "application/x-timeline-part", String(index));
+                }}
+                onDragEnd={() => setDraggedIndex(null)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => handleDrop(event, active ? index : segments.length)}
+              >
 
-            {/* Index label for each video/audio to indicate its order in the timeline */}
-            <span
-              className={`timeline-index timeline-index--${getTimelineMediaType(segment)}`}
-              aria-label={`${getTimelineMediaLabel(segment, t)} ${getTimelineIndexLabel(segment, itemIndex)}`}
-              title={getTimelineMediaLabel(segment, t)}
-            >
-              <span className="timeline-index-number">{getTimelineIndexLabel(segment, itemIndex)}</span>
-              <span className="timeline-media-icon" aria-hidden="true">{getTimelineMediaIcon(segment)}</span>
-            </span>
+                <td>{getTimelineIndexLabel(segment, itemIndex)}</td>
+                
+                <td className="timeline-file-cell">
+                  <strong>{itemIndex + 1}</strong>
+                </td>
 
-
-            <div className="timeline-item-actions">
-              {active ? (
-                <>
-                  {/* Export Audio Only Button if it's a video segment */}
-                  {!segment.audioOnly ? (
-                    <button type="button" className="ghost-button" onClick={(event) => { event.stopPropagation(); onExtractSegmentAudio(index); }} disabled={isExporting}>
-                      {t("exportAudioOnly")}
-                    </button>
-                  ) : null}
-
-                  {/* Delete Button */}
-                  <button type="button" className="ghost-button timeline-item-delete" onClick={(event) => { event.stopPropagation(); onDeleteSegment(index); }} disabled={isExporting}>
-                    {t("removeFromTimeline")}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button type="button" className="ghost-button" onClick={() => onInsertTimelinePart(segment, index)} disabled={isExporting}>
-                    {t("insert")}
-                  </button>
-                  <button type="button" className="timeline-item-delete" onClick={() => onDeleteTimelinePart(index)} disabled={isExporting}>
-                    {t("delete")}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
-
-        {!segments.length && !timelineParts.length ? <div className="timeline-empty">{t("noSegments")}</div> : null}
+                <td className="timeline-table-actions">
+                  {active ? (
+                    <>
+                      {!segment.audioOnly ? (
+                        <button type="button" className="ghost-button" onClick={(event) => { event.stopPropagation(); onExtractSegmentAudio(index); }} disabled={isExporting}>
+                          {t("exportAudioOnly")}
+                        </button>
+                      ) : null}
+                      <button type="button" className="ghost-button timeline-item-delete" onClick={(event) => { event.stopPropagation(); onDeleteSegment(index); }} disabled={isExporting}>
+                        {t("delete")}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" className="ghost-button" onClick={(event) => { event.stopPropagation(); onExtractSegmentAudio(index); }} disabled={isExporting}>
+                        {t("exportAudioOnly")}
+                      </button>
+                      <button type="button" className="timeline-item-delete" onClick={() => onDeleteTimelinePart(index)} disabled={isExporting}>
+                        {t("delete")}
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!timelineItems.length ? <div className="timeline-empty">{t("noSegments")}</div> : null}
       </div>
 
       <div className="clip-bank-panel">

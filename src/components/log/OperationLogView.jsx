@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from "react";
-import useLanguage from "../../hooks/useLanguage.jsx";
 
 /**
  * Renders the full operation history screen.
@@ -9,9 +8,10 @@ import useLanguage from "../../hooks/useLanguage.jsx";
 export default function OperationLogView({
   logs,
   onClose,
-  onClearLogs
+  onClearLogs,
+  language,
+  t
 }) {
-  const { language, t } = useLanguage();
   const [sortColumn, setSortColumn] = useState("timestamp");
   const [sortDirection, setSortDirection] = useState("desc");
   const [expandedId, setExpandedId] = useState(null);
