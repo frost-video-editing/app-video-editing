@@ -16,7 +16,7 @@ export default function useExportDialogActions({
   const { t } = useLanguage();
   const handleChooseOutput = useCallback(async () => {
     if (!editorApi) {
-      messages.setErrorMessage(editorMessages.runOnElectron);
+      messages.setErrorMessage(editorMessages.desktopShellRequired);
       return;
     }
     const result = await editorApi.selectOutput({ suggestedName: sourceName || "edited-video.mp4" });
@@ -41,7 +41,7 @@ export default function useExportDialogActions({
   return { handleChooseOutput, handleOpenExportConfirm, handleCloseExportConfirm };
 }
 
-// Subscribes to Electron export progress events and owns their display state.
+// Subscribes to export progress events and owns their display state.
 export function useExportProgress(editorApi) {
   const { t } = useLanguage();
   const exportStartTimeRef = useRef(null);

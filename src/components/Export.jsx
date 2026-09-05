@@ -29,6 +29,8 @@ export function ExportConfirmDialog({
   crop,
   metadata,
   outputPath,
+  audioOnly,
+  setAudioOnly,
   isExporting,
   canExport,
   onChooseOutput,

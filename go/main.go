@@ -16,8 +16,9 @@ import (
 )
 
 type Segment struct {
-	Start float64 `json:"start"`
-	End   float64 `json:"end"`
+	Start     float64 `json:"start"`
+	End       float64 `json:"end"`
+	AudioOnly bool    `json:"audioOnly"`
 }
 
 type Request struct {
@@ -29,6 +30,7 @@ type Request struct {
 	ExportProfile          string             `json:"exportProfile"`
 	AudioGainPercent       float64            `json:"audioGainPercent"`
 	AudioNormalize         bool               `json:"audioNormalize"`
+	AudioOnly              bool               `json:"audioOnly"`
 }
 
 func formatNumber(value float64) string { return strconv.FormatFloat(value, 'f', 3, 64) }
@@ -155,6 +157,22 @@ func exportSegment(request Request, ffmpeg, encoder string, index int, segment S
 		args = append(args, "-ss", formatNumber(segment.Start))
 	}
 	args = append(args, "-t", formatNumber(duration), "-i", request.SourcePath)
+	if request.AudioOnly || segment.AudioOnly {
+		args = append(args, "-vn")
+		if adjustAudio {
+			audioFilter := fmt.Sprintf("volume=%g", request.AudioGainPercent/100)
+			if request.AudioNormalize {
+				audioFilter += ",dynaudnorm"
+			}
+			args = append(args, "-af", audioFilter, "-c:a", "aac", "-b:a", "192k")
+		} else {
+			args = append(args, "-c:a", "copy")
+		}
+		args = append(args, "-movflags", "+faststart", output)
+		command := exec.Command(ffmpeg, args...)
+		command.Stderr = os.Stderr
+		return command.Run()
+	}
 	if filter == "" && !adjustAudio {
 		args = append(args, "-c", "copy")
 	} else {

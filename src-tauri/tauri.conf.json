@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "VideoEditing",
+  "version": "0.1.0",
+  "identifier": "com.frost.videoeditor",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run react:start",
+    "beforeBuildCommand": "npm run tauri:prepare && npm run react:build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Video Editing",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 980,
+        "minHeight": 680,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      },
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "dmg"],
+    "icon": [
+      "../build/icons/icon-256.png",
+      "../build/icons/icon.ico",
+      "../build/icons/icon.icns"
+    ],
+    "resources": [
+      "resources/*"
+    ],
+    "publisher": "Frost",
+    "category": "Video",
+    "shortDescription": "Local video editor",
+    "longDescription": "Local desktop video editor with crop, trim, and timeline editing."
+  }
+}

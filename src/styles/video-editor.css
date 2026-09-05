@@ -227,6 +227,23 @@ button:disabled {
   gap: 4px;
 }
 
+.support-message {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.support-message p {
+  margin: 4px 0;
+}
+
+.support-message a {
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .status-strip span,
 .clip-summary span,
 .export-meta span,
@@ -515,6 +532,7 @@ input[type="range"] {
 }
 
 .timeline-item {
+  position: relative;
   padding: 14px 16px;
   border-radius: 16px;
   border: 1px solid var(--line);
@@ -526,6 +544,15 @@ input[type="range"] {
   border-color: var(--accent);
   background: rgba(76, 201, 240, 0.12);
   box-shadow: 0 0 0 2px rgba(76, 201, 240, 0.18);
+}
+
+.timeline-item--inactive {
+  opacity: 0.42;
+  border-style: dashed;
+}
+
+.timeline-item--inactive:hover {
+  opacity: 0.72;
 }
 
 .timeline-index {
@@ -540,9 +567,47 @@ input[type="range"] {
   font-weight: 700;
 }
 
+.timeline-index--audio {
+  color: #f6b73c;
+  background: rgba(246, 183, 60, 0.15);
+}
+
+.timeline-index--video {
+  color: var(--accent);
+}
+
+.timeline-media-icon {
+  position: absolute;
+  top: 7px;
+  left: 10px;
+  width: 18px;
+  color: var(--accent);
+  font-size: 0.9rem;
+  line-height: 1;
+  text-align: center;
+  pointer-events: none;
+}
+
+.timeline-item--inactive .timeline-media-icon {
+  color: var(--muted);
+}
+
 .timeline-item div {
   flex: 1;
   min-width: 0;
+}
+
+.timeline-item-label {
+  display: flex;
+  align-items: center;
+}
+
+.timeline-item-actions {
+  display: flex;
+  flex: 0 1 auto !important;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .timeline-badge {
@@ -570,6 +635,20 @@ input[type="range"] {
   padding: 18px 16px;
   border-radius: 16px;
   border: 1px dashed var(--line-strong);
+}
+
+.timeline-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 20;
+  max-width: min(360px, calc(100vw - 48px));
+  padding: 12px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--panel, #14202c);
+  color: var(--text, #fff);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
 .clip-bank-panel {
@@ -605,6 +684,14 @@ input[type="range"] {
 .clip-bank-item span {
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+.timeline-part-item {
+  cursor: grab;
+}
+
+.timeline-part-item:active {
+  cursor: grabbing;
 }
 
 .timeline-boundary-handle {

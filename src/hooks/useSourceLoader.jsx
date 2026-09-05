@@ -16,6 +16,7 @@ export default function useSourceLoader({
   setSelectionEnd,
   setPlayheadWithPreview,
   setClipboard,
+  setTimelineParts,
   setOutputPath,
   setCrop,
   emptyCrop,
@@ -45,7 +46,7 @@ export default function useSourceLoader({
 
     if (!editorApi) {
       stopLoadingOverlay();
-      messages.setErrorMessage(editorMessages.runOnElectron);
+      messages.setErrorMessage(editorMessages.desktopShellRequired);
       messages.setStatusMessage(editorMessages.loadFailed);
       return;
     }
@@ -79,6 +80,7 @@ export default function useSourceLoader({
       setSelectionEnd(info.duration);
       setPlayheadWithPreview(0);
       setClipboard([]);
+      setTimelineParts([]);
       setOutputPath("");
       setCrop(emptyCrop);
       clearUndoHistory();
@@ -100,11 +102,11 @@ export default function useSourceLoader({
       messages.setErrorMessage(error?.message || editorMessages.videoLoadingFailed);
       messages.setStatusMessage(editorMessages.loadFailed);
     }
-  }, [clearLoadCompletionTimeout, clearUndoHistory, editorApi, emptyCrop, isOperationTypeEnabled, loadCompletionTimeoutRef, messages, resetCropSelection, setClipboard, setCrop, setIsLoading, setLoadingIndeterminate, setLoadingMessage, setLoadingProgress, setMetadata, setOperationLogs, setOutputPath, setPlayheadWithPreview, setSelectionEnd, setSelectionStart, setSegments, setSourceName, setSourcePath, setSourceUrl, stopLoadingOverlay]);
+  }, [clearLoadCompletionTimeout, clearUndoHistory, editorApi, emptyCrop, isOperationTypeEnabled, loadCompletionTimeoutRef, messages, resetCropSelection, setClipboard, setCrop, setIsLoading, setLoadingIndeterminate, setLoadingMessage, setLoadingProgress, setMetadata, setOperationLogs, setOutputPath, setPlayheadWithPreview, setSelectionEnd, setSelectionStart, setSegments, setSourceName, setSourcePath, setSourceUrl, setTimelineParts, stopLoadingOverlay]);
 
   const handleChooseSource = useCallback(async () => {
     if (!editorApi) {
-      messages.setErrorMessage(t("electronRequired"));
+      messages.setErrorMessage(t("desktopShellRequired"));
       return;
     }
 

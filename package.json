@@ -1,33 +1,24 @@
 {
   "name": "app-video-editing",
   "version": "0.1.0",
-  "description": "Electron + React local video editor",
+  "description": "Tauri + React + Go local video editor",
   "author": "Frost",
-  "main": "Desktop/electron/main.js",
   "type": "module",
   "scripts": {
     "react:start": "vite",
     "react:build": "vite build",
     "ui:check": "playwright test",
-    "start": "electron .",
     "build:exporter": "cd go && go build -o video-exporter.exe .",
     "build:exporter:mac": "cd go && go build -o video-exporter .",
-    "dev": "concurrently \"npm run react:start\" \"wait-on tcp:5173 && electron .\"",
-    "move:exe": "node --input-type=commonjs -e \"const fs=require('fs');const path=require('path');const root=process.cwd();const release=path.join(root,'release');if(!fs.existsSync(release)) process.exit(0);for(const name of ['AMM-Setup-x64.exe','AMM-Setup-ia32.exe']){const target=path.join(root,name);if(fs.existsSync(target)) fs.rmSync(target,{force:true});}const files=fs.readdirSync(release);for(const f of files){const m=f.match(/^AMM-Setup-.*-(x64|ia32)\\.exe$/i);if(m){const dest=path.join(root,'AMM-Setup-'+m[1]+'.exe');fs.copyFileSync(path.join(release,f),dest);console.log('Copied release/'+f+' -> '+path.basename(dest));}}console.log('Portable app folders are available in release/win-unpacked and release/win-ia32-unpacked');\"",
-    "bring:exe": "npm run move:exe",
-    "dist:win": "npm run build:exporter && npm run react:build && electron-builder --publish never --win nsis --x64",
-    "dist:win32": "npm run build:exporter && npm run react:build && electron-builder --publish never --win nsis --ia32 --config.win.artifactName=VideoEditing-${version}-x86.${ext}",
-    "dist:win:all": "npm run build:exporter && npm run react:build && electron-builder --publish never --win nsis --x64 && electron-builder --publish never --win nsis --ia32 --config.win.artifactName=VideoEditing-${version}-x86.${ext}",
-    "dist:mac": "npm run build:exporter:mac && npm run react:build && electron-builder --publish never --mac --x64",
-    "dist:mac:arm64": "npm run build:exporter:mac && npm run react:build && electron-builder --publish never --mac --arm64",
-    "dist:mac:all": "npm run build:exporter:mac && npm run react:build && electron-builder --publish never --mac --x64 --arm64",
-    "dist:all": "npm run dist:win:all && echo macOS release files are built in GitHub Actions or on a macOS machine with npm run dist:mac:all",
-    "dist:dir": "npm run react:build && electron-builder --dir",
     "android:build": "npm run react:build && npx cap copy android && npx cap open android",
     "android:sync": "npm run react:build && npx cap sync android",
     "android:studio": "npm run android:sync && npx cap open android",
     "android:apk:debug": "npm run android:sync && cd android && gradlew.bat assembleDebug",
-    "android:apk:release": "npm run android:sync && cd android && gradlew.bat assembleRelease"
+    "android:apk:release": "npm run android:sync && cd android && gradlew.bat assembleRelease",
+    "tauri": "tauri",
+    "tauri:dev": "npm run build:exporter && npm run tauri:prepare && tauri dev",
+    "tauri:build": "npm run tauri:prepare && tauri build",
+    "tauri:prepare": "node --input-type=commonjs -e \"const fs=require('fs');const path=require('path');const dest=path.join('src-tauri','resources');fs.mkdirSync(dest,{recursive:true});const copies=[['node_modules/ffmpeg-static/ffmpeg.exe','ffmpeg.exe'],['node_modules/ffmpeg-static/ffmpeg','ffmpeg'],['node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe','ffprobe.exe'],['node_modules/ffprobe-static/bin/darwin/x64/ffprobe','ffprobe'],['node_modules/ffprobe-static/bin/darwin/arm64/ffprobe','ffprobe'],['node_modules/ffprobe-static/bin/linux/x64/ffprobe','ffprobe'],['go/video-exporter.exe','video-exporter.exe'],['go/video-exporter','video-exporter']];let copied=0;for(const [from,to] of copies){if(fs.existsSync(from)){fs.copyFileSync(from,path.join(dest,to));console.log('Copied '+from+' -> '+path.join(dest,to));copied++;}}if(!copied) console.warn('tauri:prepare copied 0 binaries. Run npm install and npm run build:exporter first.');\""
   },
   "keywords": [],
   "license": "ISC",
@@ -35,6 +26,7 @@
     "@capacitor-community/sqlite": "^8.1.0",
     "@capacitor/android": "^8.3.3",
     "@capacitor/core": "^8.3.3",
+    "@tauri-apps/api": "^2.1.1",
     "better-sqlite3": "^12.9.0",
     "chart.js": "^4.5.1",
     "ffmpeg-static": "^5.3.0",
@@ -47,92 +39,9 @@
   "devDependencies": {
     "@capacitor/cli": "^8.3.3",
     "@playwright/test": "^1.62.1",
+    "@tauri-apps/cli": "^2.1.0",
     "@vitejs/plugin-react": "^6.1.0",
-    "concurrently": "^9.2.4",
-    "electron": "^43.4.1",
-    "electron-builder": "^26.15.3",
     "typescript": "^6.0.3",
-    "vite": "^8.2.2",
-    "wait-on": "^9.0.4"
-  },
-  "build": {
-    "appId": "com.frost.videoeditor",
-    "productName": "VideoEditing",
-    "icon": "build/icons/icon",
-    "files": [
-      "Desktop/electron/**/*",
-      "dist/**/*",
-      "go/video-exporter*",
-      "package.json"
-    ],
-    "asarUnpack": [
-      "node_modules/better-sqlite3/**/*",
-      "node_modules/ffmpeg-static/**/*",
-      "node_modules/ffprobe-static/**/*",
-      "go/video-exporter*"
-    ],
-    "extraResources": [
-      {
-        "from": "go/video-exporter.exe",
-        "to": "go/video-exporter.exe"
-      },
-      {
-        "from": "node_modules/ffmpeg-static/ffmpeg.exe",
-        "to": "ffmpeg/ffmpeg.exe"
-      },
-      {
-        "from": "node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe",
-        "to": "ffprobe/ffprobe.exe"
-      }
-    ],
-    "directories": {
-      "output": "release"
-    },
-    "win": {
-      "executableName": "VideoEditing",
-      "artifactName": "VideoEditing-${version}-${arch}.${ext}",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64",
-            "ia32"
-          ]
-        }
-      ]
-    },
-    "mac": {
-      "executableName": "VideoEditing",
-      "artifactName": "VideoEditing-mac-${version}-${arch}.${ext}",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "guid": "com.frost.videoeditor",
-      "deleteAppDataOnUninstall": false,
-      "createStartMenuShortcut": true,
-      "createDesktopShortcut": true,
-      "shortcutName": "VideoEditing"
-    },
-    "extraMetadata": {
-      "main": "Desktop/electron/main.js"
-    }
+    "vite": "^8.2.2"
   }
 }

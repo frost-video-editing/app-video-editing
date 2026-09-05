@@ -52,7 +52,7 @@ export default function useOperationLogs() {
     } catch (error) {
       console.error(t("persistOperationLogsFailed"), error);
     }
-  }, [operationLogs]);
+  }, [operationLogs, t]);
 
   useEffect(() => {
     try {

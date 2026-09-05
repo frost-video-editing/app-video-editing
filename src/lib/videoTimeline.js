@@ -82,7 +82,7 @@ export function createFullTimeline(duration) {
 
 function pushSegment(list, segment) {
   if (segmentDuration(segment) > 0) {
-    list.push({ start: segment.start, end: segment.end });
+    list.push({ ...segment, start: segment.start, end: segment.end });
   }
 }
 
