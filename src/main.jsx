@@ -4,6 +4,30 @@ import VideoEditorApp from "./VideoEditorApp.jsx";
 import { installTauriEditorApi, isTauriRuntime } from "./tauri/editorApi.js";
 import "./styles/video-editor.css";
 
+class AppErrorBoundary extends React.Component {
+  state = { error: null };
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Video editor failed to render.", error, errorInfo);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+
+    return (
+      <main className="app-error-screen">
+        <h1>アプリの表示中にエラーが発生しました</h1>
+        <p>詳細は開発者コンソールを確認してください。</p>
+        <pre>{this.state.error.message}</pre>
+      </main>
+    );
+  }
+}
+
 // Under Tauri, install the invoke/listen-based editorApi before React renders
 // so VideoEditorApp reads a populated window.editorApi. In a plain browser
 // context there is no bridge and the UI shows the desktop-shell notice.
@@ -20,7 +44,9 @@ async function bootstrap() {
 
   createRoot(document.getElementById("root")).render(
     <React.StrictMode>
-      <VideoEditorApp />
+      <AppErrorBoundary>
+        <VideoEditorApp />
+      </AppErrorBoundary>
     </React.StrictMode>
   );
 }
