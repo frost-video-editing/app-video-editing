@@ -18,6 +18,7 @@
     "tauri": "tauri",
     "tauri:dev": "npm run build:exporter && npm run tauri:prepare && tauri dev",
     "tauri:build": "npm run tauri:prepare && tauri build",
+    "dist:win:all": "npm run build:exporter && npm run tauri:prepare && npm run react:build && tauri build --target x86_64-pc-windows-msvc && tauri build --target i686-pc-windows-msvc",
     "tauri:prepare": "node --input-type=commonjs -e \"const fs=require('fs');const path=require('path');const dest=path.join('src-tauri','resources');fs.mkdirSync(dest,{recursive:true});const copies=[['node_modules/ffmpeg-static/ffmpeg.exe','ffmpeg.exe'],['node_modules/ffmpeg-static/ffmpeg','ffmpeg'],['node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe','ffprobe.exe'],['node_modules/ffprobe-static/bin/darwin/x64/ffprobe','ffprobe'],['node_modules/ffprobe-static/bin/darwin/arm64/ffprobe','ffprobe'],['node_modules/ffprobe-static/bin/linux/x64/ffprobe','ffprobe'],['go/video-exporter.exe','video-exporter.exe'],['go/video-exporter','video-exporter']];let copied=0;for(const [from,to] of copies){if(fs.existsSync(from)){fs.copyFileSync(from,path.join(dest,to));console.log('Copied '+from+' -> '+path.join(dest,to));copied++;}}if(!copied) console.warn('tauri:prepare copied 0 binaries. Run npm install and npm run build:exporter first.');\""
   },
   "keywords": [],

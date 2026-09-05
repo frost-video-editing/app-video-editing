@@ -42,8 +42,19 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Install Rust Windows targets
+        shell: pwsh
+        run: |
+          rustup target add x86_64-pc-windows-msvc
+          rustup target add i686-pc-windows-msvc
 
       - name: Build Windows installer (x64 + x86)
         run: npm run dist:win:all
@@ -55,8 +66,11 @@ jobs:
         shell: pwsh
         run: |
           $tag = $env:RELEASE_VERSION
-          $x64  = Get-Item "release\VideoEditing-*-x64.exe"  | Select-Object -First 1
-          $x86 = Get-Item "release\VideoEditing-*-x86.exe"  | Select-Object -First 1
+          $x64Source = Get-Item "src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis\*.exe" | Select-Object -First 1
+          $x86Source = Get-Item "src-tauri\target\i686-pc-windows-msvc\release\bundle\nsis\*.exe" | Select-Object -First 1
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          $x64 = Copy-Item $x64Source.FullName "release\VideoEditing-$tag-x64.exe" -PassThru
+          $x86 = Copy-Item $x86Source.FullName "release\VideoEditing-$tag-x86.exe" -PassThru
 
           gh release create $tag `
             --title "VideoEditing $tag" `
