@@ -16,7 +16,7 @@ export default function useExportDialogActions({
   const { t } = useLanguage();
   const handleChooseOutput = useCallback(async () => {
     if (!editorApi) {
-      messages.setErrorMessage(editorMessages.runOnElectron);
+      messages.setErrorMessage(editorMessages.desktopShellRequired);
       return;
     }
     const result = await editorApi.selectOutput({ suggestedName: sourceName || "edited-video.mp4" });
@@ -24,6 +24,18 @@ export default function useExportDialogActions({
     setOutputPath(result.filePath);
     messages.setStatusMessage(t("outputSet", result.filePath));
   }, [editorApi, messages, setOutputPath, sourceName]);
+
+  const handleChooseOutputFolder = useCallback(async (setOutputDirectoryPath) => {
+    if (!editorApi?.selectOutputFolder) {
+      messages.setErrorMessage(editorMessages.desktopShellRequired);
+      return;
+    }
+    const result = await editorApi.selectOutputFolder();
+    if (!result) return;
+    setOutputPath("");
+    setOutputDirectoryPath(result.filePath);
+    messages.setStatusMessage(t("outputFolderSet", result.filePath));
+  }, [editorApi, messages, t]);
 
   const handleOpenExportConfirm = useCallback(() => {
     if (!sourcePath || !segments.length) {
@@ -38,10 +50,10 @@ export default function useExportDialogActions({
     if (!isExporting) setIsExportConfirmOpen(false);
   }, [isExporting, setIsExportConfirmOpen]);
 
-  return { handleChooseOutput, handleOpenExportConfirm, handleCloseExportConfirm };
+  return { handleChooseOutput, handleChooseOutputFolder, handleOpenExportConfirm, handleCloseExportConfirm };
 }
 
-// Subscribes to Electron export progress events and owns their display state.
+// Subscribes to export progress events and owns their display state.
 export function useExportProgress(editorApi) {
   const { t } = useLanguage();
   const exportStartTimeRef = useRef(null);

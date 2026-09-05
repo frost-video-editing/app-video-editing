@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { logError } from "../lib/logger.js";
 import { editorMessages } from "../lib/editorMessages.js";
-import { clamp, sourceToTimelineTime, timelineToSourceTime } from "../lib/videoTimeline.js";
+import { clamp, sourceToTimelineTime, timelineDuration, timelineToSourceTime } from "../lib/videoTimeline.js";
 import useLanguage from "./useLanguage.jsx";
 
 // Tracks the displayed video rectangle inside the preview stage.
@@ -71,6 +71,7 @@ export function usePreviewPlayback({
   sourceUrl,
   duration,
   segments,
+  playhead,
   onPlayheadChange,
   setErrorText,
   setStatus
@@ -156,10 +157,41 @@ export function usePreviewPlayback({
   function handlePreviewTimeUpdate(event) {
     const currentTime = Number(event.currentTarget.currentTime) || 0;
     setPreviewCurrentTime(currentTime);
-    const timelineTime = sourceToTimelineTime(segments, currentTime);
+    const timelineTime = sourceToTimelineTime(segments, currentTime, playhead);
     if (timelineTime !== null) {
       onPlayheadChange((current) => Math.abs(current - timelineTime) > 0.15 ? timelineTime : current);
     }
+  }
+
+  function handlePreviewEnded() {
+    const video = videoRef.current;
+    const totalDuration = timelineDuration(segments);
+    if (!video || !segments.length) {
+      setIsPreviewPlaying(false);
+      return;
+    }
+
+    let cursor = 0;
+    const currentTimelineTime = Number(playhead) || 0;
+    for (const segment of segments) {
+      const segmentDuration = Math.max(0, Number(segment.end) - Number(segment.start));
+      const segmentEnd = cursor + segmentDuration;
+      if (currentTimelineTime < segmentEnd - 0.05) {
+        const nextTimelineTime = segmentEnd;
+        if (nextTimelineTime < totalDuration) {
+          const nextSourceTime = timelineToSourceTime(segments, nextTimelineTime + 0.01);
+          if (nextSourceTime !== null) {
+            video.currentTime = nextSourceTime;
+            onPlayheadChange(nextTimelineTime);
+            video.play().then(() => setIsPreviewPlaying(true)).catch(() => setIsPreviewPlaying(false));
+            return;
+          }
+        }
+        break;
+      }
+      cursor = segmentEnd;
+    }
+    setIsPreviewPlaying(false);
   }
 
   async function handleTogglePreviewPlayback() {
@@ -291,6 +323,7 @@ export function usePreviewPlayback({
     handlePreviewVideoReady,
     handlePreviewVideoWaiting,
     handlePreviewVideoError,
+    handlePreviewEnded,
     handlePreviewTimeUpdate,
     handleTogglePreviewPlayback,
     handleTogglePreviewSpeed,

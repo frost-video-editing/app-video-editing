@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import useLanguage from "../../hooks/useLanguage.jsx";
 
 export function CropControls({
@@ -16,10 +16,13 @@ export function CropControls({
   handleApplyCropPreset,
   handleDeletePreset,
   cancelDeletePreset,
+  handleExportCropPresets,
+  handleImportCropPresets,
   pendingDelete,
   hasCrop
 }) {
   const { t } = useLanguage();
+  const importInputRef = useRef(null);
   return (
     <div className="preview-crop-coords">
       {previewBounds ? (
@@ -64,6 +67,7 @@ export function CropControls({
           <button type="button" className="secondary-button" onClick={handleSaveCropPreset} disabled={!hasCrop}>{t("save")}</button>
         </div>
 
+        {/* Saved crop presets */}
         {cropPresets.length ? (
           <details style={{ marginTop: 8 }}>
             <summary style={{ cursor: "pointer", fontWeight: 700 }}>{t("savedPresets")}</summary>
@@ -85,6 +89,22 @@ export function CropControls({
                 </li>
               ))}
             </ul>
+            
+            {/* Export and import buttons for crop presets */}
+            <div style={{ display: "flex", gap: 8, margin: "8px 0" }}>
+              <button type="button" className="ghost-button" onClick={handleExportCropPresets}>{t("downloadPresets")}</button>
+              <button type="button" className="ghost-button" onClick={() => importInputRef.current?.click()}>{t("importPresets")}</button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept="application/json,.json"
+                hidden
+                onChange={(event) => {
+                  handleImportCropPresets(event.target.files?.[0]);
+                  event.target.value = "";
+                }}
+              />
+            </div>
           </details>
         ) : null}
       </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { formatCrop } from "../lib/crop.js";
 import { formatVideoTime } from "../lib/videoTimeline.js";
+import { OutputPathButton } from "./DownloadSettings.jsx";
 import useLanguage from "../hooks/useLanguage.jsx";
 
 function getOutputFileNames(outputPath, fileCount) {
@@ -31,7 +32,6 @@ export function ExportConfirmDialog({
   outputPath,
   isExporting,
   canExport,
-  onChooseOutput,
   onClose,
   onExport
 }) {
@@ -116,9 +116,6 @@ export function ExportConfirmDialog({
         </div>
 
         <div className="action-row export-confirm-actions">
-          <button type="button" className="secondary-button" onClick={onChooseOutput} disabled={isExporting}>
-            {outputPath ? t("changeOutput") : t("chooseOutput")}
-          </button>
           <button type="button" className="ghost-button" onClick={onClose} disabled={isExporting}>
             {t("cancel")}
           </button>

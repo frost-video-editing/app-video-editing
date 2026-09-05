@@ -16,7 +16,7 @@ export const editorMessages = Object.freeze({
   previewLoadFailed: "プレビューの読み込みに失敗しました。",
   previewPlaybackFailed: "プレビューの再生操作に失敗しました。",
   chooseVideoFirst: "先に動画を読み込んでください。",
-  electronRequired: "Electron 上で起動してください。",
+  desktopShellRequired: "デスクトップ版（Tauri）で起動してください。",
   cropInstruction: "プレビュー上をドラッグして、残したい範囲を指定してください。",
   cropSelectAgain: "ドラッグして残したい範囲を選択してください。",
   cropUpdated: "プレビューで crop 範囲を更新しました。",

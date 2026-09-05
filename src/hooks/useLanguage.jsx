@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import ja from "../locales/ja.json";
 import en from "../locales/en.json";
 
@@ -16,10 +16,10 @@ export default function useLanguage() {
     document.documentElement.lang = language;
   }, [language]);
 
-  const t = (key, ...values) => {
+  const t = useCallback((key, ...values) => {
     const template = translations[language][key] || translations.ja[key] || key;
     return values.reduce((result, value, index) => result.replaceAll(`{${index}}`, String(value)), template);
-  };
+  }, [language]);
 
   return { language, setLanguage, t };
 }

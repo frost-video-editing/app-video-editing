@@ -5,7 +5,12 @@ import { createExportLog } from "../lib/operationLog.js";
 import { editorMessages } from "../lib/editorMessages.js";
 import useLanguage from "./useLanguage.jsx";
 
-// Owns the Electron export request, progress initialization, and export notices.
+function joinOutputPath(folderPath, fileName) {
+  const separator = folderPath.includes("\\") ? "\\" : "/";
+  return `${folderPath.replace(/[\\/]$/, "")}${separator}${fileName}`;
+}
+
+// Owns the export request, progress initialization, and export notices.
 export default function useVideoExport({
   editorApi,
   sourcePath,
@@ -19,6 +24,8 @@ export default function useVideoExport({
   exportProfile,
   audioGainPercent,
   audioNormalize,
+  audioOnly,
+  outputDirectoryPath,
   setOutputPath,
   setIsExporting,
   setIsExportConfirmOpen,
@@ -34,7 +41,7 @@ export default function useVideoExport({
   const { t } = useLanguage();
   return useCallback(async () => {
     if (!editorApi) {
-      messages.setErrorMessage(editorMessages.runOnElectron);
+      messages.setErrorMessage(editorMessages.desktopShellRequired);
       return;
     }
     if (!sourcePath || !segments.length) {
@@ -48,7 +55,12 @@ export default function useVideoExport({
       return;
     }
 
-    const chosenOutput = outputPath || (await editorApi.selectOutput({ suggestedName: sourceName || "edited-video.mp4" }))?.filePath;
+    const suggestedName = audioOnly
+      ? (sourceName || "edited-video.mp4").replace(/\.[^.]+$/, "-audio.mp4")
+      : (sourceName || "edited-video.mp4");
+    const chosenOutput = outputPath || (outputDirectoryPath
+      ? joinOutputPath(outputDirectoryPath, suggestedName)
+      : (await editorApi.selectOutput({ suggestedName }))?.filePath);
     if (!chosenOutput) return;
 
     setOutputPath(chosenOutput);
@@ -72,7 +84,8 @@ export default function useVideoExport({
         cropScaleAlgorithm,
         exportProfile,
         audioGainPercent: Number(audioGainPercent || 100),
-        audioNormalize: Boolean(audioNormalize)
+        audioNormalize: Boolean(audioNormalize),
+        audioOnly: Boolean(audioOnly)
       });
       const outputPaths = Array.isArray(result?.outputPaths) && result.outputPaths.length ? result.outputPaths : [chosenOutput];
       messages.setStatusMessage(t("exportComplete", outputPaths.length));
@@ -94,5 +107,5 @@ export default function useVideoExport({
       setIsExporting(false);
       resetExportOverlay();
     }
-  }, [audioGainPercent, audioNormalize, crop, cropScaleAlgorithm, editorApi, exportProfile, exportStartTimeRef, isOperationTypeEnabled, messages, metadata, outputPath, preserveCropResolution, resetExportOverlay, segments, setExportIndeterminate, setExportMessage, setExportProgress, setIsExportConfirmOpen, setIsExporting, setOperationLogs, setOutputPath, sourceName, sourcePath]);
+  }, [audioGainPercent, audioNormalize, audioOnly, crop, cropScaleAlgorithm, editorApi, exportProfile, exportStartTimeRef, isOperationTypeEnabled, messages, metadata, outputDirectoryPath, outputPath, preserveCropResolution, resetExportOverlay, segments, setExportIndeterminate, setExportMessage, setExportProgress, setIsExportConfirmOpen, setIsExporting, setOperationLogs, setOutputPath, sourceName, sourcePath]);
 }

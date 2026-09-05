@@ -61,9 +61,18 @@ export default function VideoEditorApp() {
   const [crop, setCrop] = useState(emptyCrop);
   const [clipboard, setClipboard] = useState([]);
   const [clipBank, setClipBank] = useState([]); // saved clip buttons
+  const [timelineParts, setTimelineParts] = useState([]);
+  const [timelineToast, setTimelineToast] = useState("");
+  const [timelineToastKind, setTimelineToastKind] = useState("success");
+  const timelineToastTimerRef = useRef(null);
   const [selectedClipIndex, setSelectedClipIndex] = useState(null);
   const [cutMarkers, setCutMarkers] = useState([]); // array of { start, end }
   const [outputPath, setOutputPath] = useState("");
+  const [outputDirectoryPath, setOutputDirectoryPath] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem("videoEditor.outputDirectoryPath") || "";
+  });
+  const [audioOnly, setAudioOnly] = useState(false);
   const [isExportConfirmOpen, setIsExportConfirmOpen] = useState(false);
   const [preserveCropResolution, setPreserveCropResolution] = useState(true);
   const [backupSourceOnImport, setBackupSourceOnImport] = useState(() => {
@@ -72,6 +81,10 @@ export default function VideoEditorApp() {
   });
   const [cropScaleAlgorithm, setCropScaleAlgorithm] = useState("lanczos");
   const [exportProfile, setExportProfile] = useState("standard");
+  const [cropPresetsExportPath, setCropPresetsExportPath] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem("videoEditor.cropPresetsExportPath") || "";
+  });
 
   const [isExporting, setIsExporting] = useState(false);
   const [isCropPreviewLocked, setIsCropPreviewLocked] = useState(false);
@@ -106,6 +119,18 @@ export default function VideoEditorApp() {
   const clipboardDuration = useMemo(() => timelineDuration(clipboard), [clipboard]);
   const messages = useEditorMessages(editorMessages.initialStatus);
   const { language, setLanguage, t } = useLanguage();
+  const showTimelineToast = (message, kind = "success") => {
+    if (timelineToastTimerRef.current) clearTimeout(timelineToastTimerRef.current);
+    setTimelineToastKind(kind);
+    setTimelineToast(message);
+    timelineToastTimerRef.current = setTimeout(() => {
+      setTimelineToast("");
+      timelineToastTimerRef.current = null;
+    }, 2500);
+  };
+  useEffect(() => {
+    if (messages.errorText) showTimelineToast(messages.errorText, "error");
+  }, [messages.errorText]);
   const hasCrop = crop.left > 0 || crop.top > 0 || crop.right > 0 || crop.bottom > 0;
   const addOperationLog = useOperationLogger({
     selectedDuration,
@@ -145,6 +170,7 @@ export default function VideoEditorApp() {
     handlePreviewVideoReady,
     handlePreviewVideoWaiting,
     handlePreviewVideoError,
+    handlePreviewEnded,
     handlePreviewTimeUpdate,
     handleTogglePreviewPlayback,
     handleTogglePreviewSpeed,
@@ -155,6 +181,7 @@ export default function VideoEditorApp() {
     sourceUrl,
     duration: metadata.duration,
     segments,
+    playhead,
     onPlayheadChange: setPlayhead,
     setErrorText: messages.setErrorMessage,
     setStatus: messages.setStatusMessage
@@ -168,6 +195,7 @@ export default function VideoEditorApp() {
       playhead,
       clipboard,
       clipBank,
+      timelineParts,
       cutMarkers,
       crop,
       audioGainPercent,
@@ -183,6 +211,7 @@ export default function VideoEditorApp() {
       setPlayheadWithPreview(snapshot.playhead);
       setClipboard(snapshot.clipboard);
       setClipBank(snapshot.clipBank);
+      setTimelineParts(snapshot.timelineParts || []);
       setCutMarkers(snapshot.cutMarkers);
       setCrop(snapshot.crop);
       setAudioGainPercent(snapshot.audioGainPercent);
@@ -271,6 +300,7 @@ export default function VideoEditorApp() {
     setSelectionEnd,
     setPlayheadWithPreview,
     setClipboard,
+    setTimelineParts,
     setOutputPath,
     setCrop,
     emptyCrop,
@@ -289,7 +319,7 @@ export default function VideoEditorApp() {
     stopLoadingOverlay,
     messages
   });
-  const { handleChooseOutput, handleOpenExportConfirm, handleCloseExportConfirm } = useExportDialogActions({
+  const { handleChooseOutput, handleChooseOutputFolder, handleOpenExportConfirm, handleCloseExportConfirm } = useExportDialogActions({
     editorApi,
     sourceName,
     sourcePath,
@@ -308,6 +338,8 @@ export default function VideoEditorApp() {
     handleApplyCropPreset,
     handleDeletePreset,
     cancelDeletePreset,
+    handleExportCropPresets,
+    handleImportCropPresets,
     pendingDelete
   } = useCropPresets({
     crop,
@@ -317,6 +349,9 @@ export default function VideoEditorApp() {
     setIsCropPreviewLocked,
     pushUndoSnapshot,
     messages,
+    showToast: showTimelineToast,
+    editorApi,
+    cropPresetsExportPath,
     hasCrop,
     presetName,
     setPresetName
@@ -368,6 +403,8 @@ export default function VideoEditorApp() {
     handleCopy,
     handleDelete,
     handleDeleteSegment,
+    handleInsertTimelinePart,
+    handleDeleteTimelinePart,
     handleCut,
     moveSegment,
     moveSegmentToIndex,
@@ -386,6 +423,7 @@ export default function VideoEditorApp() {
     clipboardDuration,
     setClipboard,
     setClipBank,
+    setTimelineParts,
     setSegments,
     setSelectionStart,
     setSelectionEnd,
@@ -394,7 +432,8 @@ export default function VideoEditorApp() {
     setPlayheadWithPreview,
     pushUndoSnapshot,
     messages,
-    addOperationLog
+    addOperationLog,
+    showToast: showTimelineToast
   });
 
   const handleExport = useVideoExport({
@@ -410,6 +449,8 @@ export default function VideoEditorApp() {
     exportProfile,
     audioGainPercent,
     audioNormalize,
+    audioOnly,
+    outputDirectoryPath,
     setOutputPath,
     setIsExporting,
     setIsExportConfirmOpen,
@@ -422,6 +463,23 @@ export default function VideoEditorApp() {
     isOperationTypeEnabled,
     messages
   });
+
+  // Adds an audio-only copy of one segment to the current timeline.
+  const handleExtractSegmentAudio = (index) => {
+    if (isExporting || !metadata.hasAudio) return;
+    const segment = segments[index];
+    if (!segment) return;
+    pushUndoSnapshot();
+    setSegments((current) => [...current, {
+      ...segment,
+      audioOnly: true,
+      audioSource: { start: segment.start, end: segment.end }
+    }]);
+    messages.clearErrorOnly();
+    messages.setStatusMessage(t("audioSegmentAdded"));
+    showTimelineToast(t("audioSegmentAdded"));
+    addOperationLog("insert");
+  };
 
   // Centralized shortcut handling
   useShortcuts({
@@ -443,8 +501,8 @@ export default function VideoEditorApp() {
       <main className="editor-shell editor-shell--no-api">
         <section className="hero card">
           <p className="eyebrow">Video Editing</p>
-          <h1>{t("startElectron")}</h1>
-          <p>{t("electronOnly")}</p>
+          <h1>{t("startDesktopShell")}</h1>
+          <p>{t("desktopShellOnly")}</p>
         </section>
       </main>
     );
@@ -477,6 +535,8 @@ export default function VideoEditorApp() {
           crop,
           metadata,
           outputPath,
+          audioOnly,
+          setAudioOnly,
           isExporting,
           canExport: Boolean(sourcePath && segments.length),
           onChooseOutput: handleChooseOutput,
@@ -506,6 +566,7 @@ export default function VideoEditorApp() {
         indeterminate={loadingIndeterminate}
         startTime={loadStartTimeRef.current}
       />
+      {timelineToast ? <div className={`timeline-toast timeline-toast--${timelineToastKind}`} role="status">{timelineToast}</div> : null}
       <SettingsModal
         t={t}
         isOpen={isSettingsOpen}
@@ -518,6 +579,14 @@ export default function VideoEditorApp() {
         setCropScaleAlgorithm={setCropScaleAlgorithm}
         exportProfile={exportProfile}
         setExportProfile={setExportProfile}
+        editorApi={editorApi}
+        onError={(message) => showTimelineToast(message, "error")}
+        cropPresetsExportPath={cropPresetsExportPath}
+        setCropPresetsExportPath={setCropPresetsExportPath}
+        outputDirectoryPath={outputDirectoryPath}
+        setOutputDirectoryPath={setOutputDirectoryPath}
+        onChooseOutputFolder={() => handleChooseOutputFolder(setOutputDirectoryPath)}
+        isExporting={isExporting}
         audioGainPercent={audioGainPercent}
         setAudioGainPercent={setAudioGainPercent}
         audioNormalize={audioNormalize}
@@ -626,7 +695,7 @@ export default function VideoEditorApp() {
             onSeeked={handlePreviewTimeUpdate}
             onPlay={handlePreviewPlay}
             onPause={handlePreviewPause}
-            onEnded={handlePreviewPause}
+            onEnded={handlePreviewEnded}
             onLoadStart={handlePreviewVideoLoadStart}
             onLoadedMetadata={handlePreviewVideoReady}
             onLoadedData={handlePreviewVideoReady}
@@ -654,6 +723,8 @@ export default function VideoEditorApp() {
               handleApplyCropPreset,
               handleDeletePreset,
               cancelDeletePreset,
+              handleExportCropPresets,
+              handleImportCropPresets,
               pendingDelete,
               hasCrop
             }}
@@ -761,6 +832,8 @@ export default function VideoEditorApp() {
         handleApplyCropPreset,
         handleDeletePreset,
         cancelDeletePreset,
+        handleExportCropPresets,
+        handleImportCropPresets,
         pendingDelete,
         hasCrop
       }} />
@@ -771,9 +844,13 @@ export default function VideoEditorApp() {
             t={t}
             segments={segments}
             clipBank={clipBank}
+            timelineParts={timelineParts}
             selectedSegmentIndex={selectedSegmentIndex}
             isExporting={isExporting}
+            onExtractSegmentAudio={handleExtractSegmentAudio}
             onDeleteSegment={handleDeleteSegment}
+            onInsertTimelinePart={handleInsertTimelinePart}
+            onDeleteTimelinePart={handleDeleteTimelinePart}
             onMoveSegmentToIndex={moveSegmentToIndex}
             onInsertClip={handleInsertClip}
             onSelectSegment={(index) => {
@@ -802,11 +879,21 @@ export default function VideoEditorApp() {
               </button>
             </div>
 
-            {messages.errorText ? <p className="error-message">{messages.errorText}</p> : null}
           </section>
         </aside>
       </section>
 
+      If you find this app useful, please consider supporting its development. 
+      <p>Your support helps maintain and improve the app.</p>
+        <p>Support: <a
+          href="https://github.com/sponsors/KFrost-Sponsor"
+          onClick={(e) => { e.preventDefault(); openExternalUrl('https://github.com/sponsors/KFrost-Sponsor'); }}
+          rel="noopener noreferrer"
+          style={{ color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}
+        >
+          GitHub Sponsors
+        </a>
+      </p>
     </main>
     </>
   );

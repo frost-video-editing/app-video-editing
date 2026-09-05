@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import {
   clamp,
   createFullTimeline,
+  extractRange,
   insertSegmentsAt,
   removeRange,
   segmentDuration,
@@ -27,6 +28,7 @@ export default function useTimelineEditingActions({
   clipboardDuration,
   setClipboard,
   setClipBank,
+  setTimelineParts,
   setSegments,
   setSelectionStart,
   setSelectionEnd,
@@ -35,7 +37,8 @@ export default function useTimelineEditingActions({
   setPlayheadWithPreview,
   pushUndoSnapshot,
   messages,
-  addOperationLog
+  addOperationLog,
+  showToast = () => {}
 }) {
   const { t } = useLanguage();
   const handleCopy = useMemo(() => {
@@ -60,27 +63,55 @@ export default function useTimelineEditingActions({
       return;
     }
     pushUndoSnapshot();
+    setTimelineParts((current) => [...current, ...extractRange(segments, selectedRange.start, selectedRange.end)]);
     setSegments(removeRange(segments, selectedRange.start, selectedRange.end));
     setSelectionEnd(selectedRange.start);
     setPlayheadWithPreview(selectedRange.start);
     messages.setStatusMessage(t("selectionDeleted"));
     messages.clearErrorOnly();
     addOperationLog("delete");
-  }, [addOperationLog, messages, pushUndoSnapshot, selectedDuration, selectedRange, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, t]);
+  }, [addOperationLog, messages, pushUndoSnapshot, selectedDuration, selectedRange, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setTimelineParts, t]);
 
   const handleDeleteSegment = useCallback((index) => {
     if (index < 0 || index >= segments.length) return;
     pushUndoSnapshot();
+    const deletedSegment = segments[index];
     const nextSegments = segments.filter((_, segmentIndex) => segmentIndex !== index);
     const nextDuration = timelineDuration(nextSegments);
+    setTimelineParts((current) => [...current, deletedSegment]);
     setSegments(nextSegments);
     setSelectionStart((current) => clamp(current, 0, nextDuration));
     setSelectionEnd((current) => clamp(current, 0, nextDuration));
     setPlayheadWithPreview(clamp(playhead, 0, nextDuration));
     messages.setStatusMessage(t("partDeleted", index + 1));
+    showToast(t("partRemovedFromTimeline"));
     messages.clearErrorOnly();
     addOperationLog("delete");
-  }, [addOperationLog, messages, playhead, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, t]);
+  }, [addOperationLog, messages, playhead, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, setTimelineParts, showToast, t]);
+
+  const handleInsertTimelinePart = useCallback((part, index) => {
+    if (!part) return;
+    pushUndoSnapshot();
+    const nextSegments = insertSegmentsAt(segments, playhead, [part]);
+    const insertedDuration = segmentDuration(part);
+    setSegments(nextSegments);
+    setTimelineParts((current) => current.filter((_, partIndex) => partIndex !== index));
+    setSelectionStart(playhead);
+    setSelectionEnd(playhead + insertedDuration);
+    setPlayheadWithPreview(playhead + insertedDuration);
+    messages.setStatusMessage(t("partInserted", formatVideoTime(insertedDuration)));
+    showToast(t("partInserted"));
+    messages.clearErrorOnly();
+    addOperationLog("insert");
+  }, [addOperationLog, messages, playhead, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, setTimelineParts, showToast, t]);
+
+  const handleDeleteTimelinePart = useCallback((index) => {
+    pushUndoSnapshot();
+    setTimelineParts((current) => current.filter((_, partIndex) => partIndex !== index));
+    messages.setStatusMessage(t("partRemoved"));
+    showToast(t("partRemoved"));
+    messages.clearErrorOnly();
+  }, [messages, pushUndoSnapshot, setTimelineParts, showToast, t]);
 
   const handleCut = useCallback(() => {
     const splitTime = clamp(Number(playhead) || 0, 0, totalDuration);
@@ -184,7 +215,7 @@ export default function useTimelineEditingActions({
     messages.clearErrorOnly();
   }, [messages, playhead, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, t]);
 
-  return { handleCopy, handleDelete, handleDeleteSegment, handleCut, moveSegment, moveSegmentToIndex, moveSegmentToTimelinePosition, handlePaste, handleInsertClip };
+  return { handleCopy, handleDelete, handleDeleteSegment, handleInsertTimelinePart, handleDeleteTimelinePart, handleCut, moveSegment, moveSegmentToIndex, moveSegmentToTimelinePosition, handlePaste, handleInsertClip };
 }
 
 

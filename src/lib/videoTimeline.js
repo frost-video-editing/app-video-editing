@@ -34,20 +34,25 @@ export function timelineToSourceTime(segments, time) {
 
 // Map a source video time to the first matching composed timeline time.
 // If the source time does not fall inside any segment, returns null.
-export function sourceToTimelineTime(segments, sourceTime) {
+export function sourceToTimelineTime(segments, sourceTime, preferredTimelineTime = null) {
   const s = Number(sourceTime);
   if (!Number.isFinite(s)) return null;
+  const matches = [];
   let cursor = 0;
   for (const segment of segments) {
     const segStart = Number(segment.start || 0);
     const segEnd = Number(segment.end || 0);
     const dur = Math.max(0, segEnd - segStart);
     if (s >= segStart && s <= segEnd) {
-      return cursor + Math.min(dur, Math.max(0, s - segStart));
+      matches.push(cursor + Math.min(dur, Math.max(0, s - segStart)));
     }
     cursor += dur;
   }
-  return null;
+  if (!matches.length) return null;
+  if (!Number.isFinite(preferredTimelineTime)) return matches[0];
+  return matches.reduce((closest, candidate) => (
+    Math.abs(candidate - preferredTimelineTime) < Math.abs(closest - preferredTimelineTime) ? candidate : closest
+  ), matches[0]);
 }
 
 export function formatSeconds(value) {
@@ -82,7 +87,7 @@ export function createFullTimeline(duration) {
 
 function pushSegment(list, segment) {
   if (segmentDuration(segment) > 0) {
-    list.push({ start: segment.start, end: segment.end });
+    list.push({ ...segment, start: segment.start, end: segment.end });
   }
 }
 

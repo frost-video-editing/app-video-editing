@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { clamp } from "../lib/videoTimeline.js";
 import { normalizeCropInput } from "../lib/crop.js";
 import {
@@ -10,6 +10,31 @@ import {
 import useLanguage from "./useLanguage.jsx";
 
 const STORAGE_KEY = "videoEditor.cropPresets";
+const PRESET_FILE_FORMAT = "video-editor-crop-presets";
+const MAX_PRESETS = 50;
+
+function joinPresetPath(folderPath, fileName) {
+  const separator = folderPath.includes("\\") ? "\\" : "/";
+  return `${folderPath.replace(/[\\/]$/, "")}${separator}${fileName}`;
+}
+
+function createPresetFileName() {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return `video-editor-crop-presets_${timestamp}.json`;
+}
+
+function restoreCropPresets() {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("Failed to restore crop presets", error);
+    return [];
+  }
+}
 
 // Owns crop form synchronization and saved crop preset persistence.
 export default function useCropPresets({
@@ -20,14 +45,18 @@ export default function useCropPresets({
   setIsCropPreviewLocked,
   pushUndoSnapshot,
   messages,
+  showToast,
+  editorApi,
+  cropPresetsExportPath,
   hasCrop,
   presetName,
   setPresetName
 }) {
   const { t } = useLanguage();
   const [cropForm, setCropForm] = useState({ left: 0, top: 0, width: 100, height: 100 });
-  const [cropPresets, setCropPresets] = useState([]);
+  const [cropPresets, setCropPresets] = useState(restoreCropPresets);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const isExportingPresetsRef = useRef(false);
 
   useEffect(() => {
     if (!pendingDelete) return undefined;
@@ -49,7 +78,7 @@ export default function useCropPresets({
       window.clearInterval(countdownTimer);
       window.clearTimeout(deleteTimer);
     };
-  }, [pendingDelete?.id, messages, t]);
+  }, [pendingDelete?.id]);
 
   useEffect(() => {
     if (!previewBounds) return;
@@ -70,18 +99,6 @@ export default function useCropPresets({
       });
     }
   }, [crop, cropFormUnit, previewBounds]);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) setCropPresets(parsed);
-      }
-    } catch (error) {
-      console.error("Failed to restore crop presets", error);
-    }
-  }, []);
 
   useEffect(() => {
     try {
@@ -139,12 +156,13 @@ export default function useCropPresets({
       return;
     }
     const name = (presetName || `preset-${new Date().toISOString()}`).trim();
-    setCropPresets((current) => [{ id: Date.now(), name, crop: normalizeCropInput(crop) }, ...current].slice(0, 50));
+    setCropPresets((current) => [{ id: Date.now(), name, crop: normalizeCropInput(crop) }, ...current].slice(0, MAX_PRESETS));
     setPresetName("");
     messages.setStatusMessage(t("cropPresetSaved", name));
     messages.clearErrorOnly();
   }
 
+  // apply a crop preset button
   function handleApplyCropPreset(preset) {
     if (!preset?.crop) return;
     pushUndoSnapshot();
@@ -153,14 +171,106 @@ export default function useCropPresets({
     messages.setStatusMessage(t("cropPresetApplied", preset.name));
   }
 
+  // delete a crop preset button
   function handleDeletePreset(id) {
     if (pendingDelete) return;
-    setPendingDelete({ id, remaining: 10 });
+    setPendingDelete({ id, remaining: 5 });
   }
 
+  // cancel delete a crop preset button
   function cancelDeletePreset() {
     setPendingDelete(null);
     messages.setStatusMessage(t("cropPresetDeleteCanceled"));
+  }
+
+
+  // Export crop presets to a JSON file
+  async function handleExportCropPresets() {
+    if (isExportingPresetsRef.current) return;
+    if (!cropPresets.length) {
+      showToast(t("cropPresetsExportEmpty"));
+      return;
+    }
+
+    isExportingPresetsRef.current = true;
+    messages.clearErrorOnly();
+    messages.clearStatusOnly();
+    try {
+      const payload = {
+        format: PRESET_FILE_FORMAT,
+        version: 1,
+        presets: cropPresets.map(({ name, crop }) => ({ name, crop }))
+      };
+
+      const contents = JSON.stringify(payload, null, 2);
+      let savedPath;
+      if (editorApi?.writePresetFile && cropPresetsExportPath) {
+        const fileName = createPresetFileName();
+        const filePath = joinPresetPath(cropPresetsExportPath, fileName);
+        const result = await editorApi.writePresetFile({ filePath, contents });
+        savedPath = result?.filePath || filePath;
+      } else {
+        const fileName = createPresetFileName();
+        const blob = new Blob([contents], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        link.click();
+        URL.revokeObjectURL(url);
+        savedPath = fileName;
+      }
+
+      // download message
+      messages.setStatusMessage(t("cropPresetsExported", savedPath));
+      showToast(t("cropPresetsExported", savedPath));
+
+    } catch (error) {
+      console.error("Failed to export crop presets", error);
+      messages.clearStatusOnly();
+      messages.setErrorMessage(t("cropPresetsExportFailed"));
+      showToast(t("cropPresetsExportFailed"));
+    } finally {
+      isExportingPresetsRef.current = false;
+    }
+  }
+
+  // Import crop presets from a JSON file
+  async function handleImportCropPresets(file) {
+    if (!file) return;
+
+    try {
+      const parsed = JSON.parse(await file.text());
+      const importedPresets = Array.isArray(parsed) ? parsed : parsed?.presets;
+      if (!Array.isArray(importedPresets)) throw new Error("Preset file does not contain a preset array");
+
+      const presetNames = new Set(cropPresets.map((preset) => preset.name.trim().toLocaleLowerCase()));
+      const validPresets = importedPresets
+        .filter((preset) => typeof preset?.name === "string" && preset.name.trim() && preset.crop)
+        .filter((preset) => {
+          const name = preset.name.trim();
+          const nameKey = name.toLocaleLowerCase();
+          if (presetNames.has(nameKey)) return false;
+          presetNames.add(nameKey);
+          return true;
+        })
+        .map((preset, index) => ({
+          id: Date.now() + index,
+          name: preset.name.trim(),
+          crop: normalizeCropInput(preset.crop)
+        }));
+
+      if (validPresets.length) {
+        setCropPresets((current) => [...validPresets, ...current].slice(0, MAX_PRESETS));
+        messages.setStatusMessage(t("cropPresetsImported", validPresets.length));
+      } else {
+        messages.setStatusMessage(t("cropPresetsImportNoNew"));
+      }
+      messages.clearErrorOnly();
+    } catch (error) {
+      console.error("Failed to import crop presets", error);
+      messages.setErrorMessage(t("cropPresetsImportFailed"));
+    }
   }
 
   return {
@@ -172,6 +282,8 @@ export default function useCropPresets({
     handleApplyCropPreset,
     handleDeletePreset,
     cancelDeletePreset,
+    handleExportCropPresets,
+    handleImportCropPresets,
     pendingDelete
   };
 }
