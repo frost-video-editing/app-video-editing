@@ -11,6 +11,7 @@ export default function CropEditor({
   previewBounds,
   previewViewportStyle,
   previewVideoStyle,
+  isPreviewAudioOnly,
   currentCropBoxStyle,
   draftCropBoxStyle,
   hasCrop,
@@ -64,7 +65,7 @@ export default function CropEditor({
               <video
                 key={sourceUrl}
                 ref={videoRef}
-                className="preview-video"
+                className={`preview-video${isPreviewAudioOnly ? " preview-video--audio-only" : ""}`}
                 src={sourceUrl}
                 style={previewVideoStyle}
                 playsInline

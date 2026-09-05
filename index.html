@@ -4,17 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" 
-      content="Frost Studio - A simple video editing application
+      content="Frosty Editor - A simple video editing application
       Developed by KFrost." 
     />
-    <title>Frost Studio</title>
+    <title>Frosty Editor</title>
   </head>
   <body>
     <div id="root"></div>
+    <footer>
+      © <span id="copyright-year"></span> Frosty Editor. All rights reserved.
+    </footer>
+    <script>
+      document.getElementById("copyright-year").textContent = new Date().getFullYear();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
-
-  <footer>
-    © 2026 Frost Studio. All rights reserved.
-  </footer>
 </html>

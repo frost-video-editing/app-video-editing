@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { formatCrop } from "../lib/crop.js";
 import { formatVideoTime } from "../lib/videoTimeline.js";
-import { OutputPathButton } from "./DownloadSettings.jsx";
+import { OutputPathButton } from "./setting/DownloadSettings.jsx";
 import useLanguage from "../hooks/useLanguage.jsx";
 
 function getOutputFileNames(outputPath, fileCount) {

@@ -22,9 +22,10 @@ function getSegmentNumber(segment) {
 
 function formatTimeShort(seconds) {
   const total = Math.max(0, Number(seconds) || 0);
+  const hours = Math.floor(total / 3600);
   const minutes = Math.floor(total / 60);
   const secs = Math.floor(total % 60);
-  return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  return `${String(hours).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
 function parseTimeInput(value) {
@@ -64,6 +65,20 @@ function findMatchingAudioSourceIndex(segment, segments) {
 function getTimelineDisplayNumber(segment, segments, fallbackNumber) {
   const sourceIndex = findMatchingAudioSourceIndex(segment, segments);
   return sourceIndex >= 0 ? sourceIndex + 1 : fallbackNumber;
+}
+
+function getTimelineFileNumber(segment, segments, fallbackNumber) {
+  if (segment.sourceId) {
+    const sourceOrder = [];
+    segments.forEach((item) => {
+      if (item.sourceId && !sourceOrder.includes(item.sourceId)) {
+        sourceOrder.push(item.sourceId);
+      }
+    });
+    const sourceIndex = sourceOrder.indexOf(segment.sourceId);
+    if (sourceIndex >= 0) return sourceIndex + 1;
+  }
+  return getTimelineDisplayNumber(segment, segments, fallbackNumber);
 }
 
 function TimelineVisualizer({
@@ -244,7 +259,7 @@ function TimelineVisualizer({
             items.elements.push(
               <React.Fragment key={`segment-${index}-${segment.start}-${segment.end}`}>
                 <div
-                  className={`timeline-segment-block timeline-segment-block--${getTimelineMediaType(segment)}${isSelected ? " timeline-segment-block--selected" : ""}${isDragging ? " timeline-segment-block--dragging" : ""}`}
+                  className={`timeline-segment-block timeline-segment-block--${getTimelineMediaType(segment)}${segment.audioOnly ? " timeline-segment-block--audio-only" : ""}${isSelected ? " timeline-segment-block--selected" : ""}${isDragging ? " timeline-segment-block--dragging" : ""}`}
                   style={{ width: `${Math.max(widthPct, 0)}%`, cursor: isDragging ? "grabbing" : "pointer" }}
                   title={`${getTimelineMediaLabel(segment, t)} ${segmentNumber}: ${formatTimeShort(segment.start)} - ${formatTimeShort(segment.end)}`}
                   aria-label={`${getTimelineMediaLabel(segment, t)} ${segmentNumber}: ${formatTimeShort(segment.start)} - ${formatTimeShort(segment.end)}`}
@@ -369,13 +384,7 @@ export function TimelinePanel({
   };
 
   const getFrameNumber = (segment, itemIndex) => {
-    const sourceIndex = segment.audioOnly ? findAudioSourceIndex(segment) : -1;
-    return sourceIndex >= 0 ? sourceIndex + 1 : itemIndex + 1;
-  };
-
-  const getTimelineIndexLabel = (segment, itemIndex) => {
-    const frameNumber = getFrameNumber(segment, itemIndex);
-    return String(frameNumber).padStart(2, "0");
+    return getTimelineFileNumber(segment, segments, itemIndex + 1);
   };
 
   return (
@@ -390,64 +399,76 @@ export function TimelinePanel({
         </div>
       </div>
 
-      {/* segment timeline visualizer could be added here if needed */}
-      <div className="timeline-list" onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleDrop(event, segments.length)}>
-        {timelineItems.map(({ segment, index, active }, itemIndex) => (
-          <div
-            className={`timeline-item${active && selectedSegmentIndex === index ? " timeline-item--selected" : ""}${active ? "" : " timeline-item--inactive"}`}
-            key={`${active ? "active" : "inactive"}-${segment.start}-${segment.end}-${index}`}
-            draggable={!isExporting}
-            onClick={() => active && onSelectSegment(index)}
-            onDragStart={(event) => {
-              setDraggedIndex(active ? index : null);
-              event.dataTransfer.setData(active ? "application/x-timeline-segment" : "application/x-timeline-part", String(index));
-            }}
-            onDragEnd={() => setDraggedIndex(null)}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => handleDrop(event, active ? index : segments.length)}
-          >
+      <div className="timeline-table-wrapper" onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleDrop(event, segments.length)}>
+        <table className="timeline-table">
+          <thead>
+            <tr>
+              <th scope="col">{t("sourceNumber")}</th>
+              <th scope="col">{t("timelineFile")}</th>
+              <th scope="col">{t("action")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {timelineItems.map(({ segment, index, active }, itemIndex) => (
+              <tr
+                className={active && selectedSegmentIndex === index ? "timeline-row--selected" : ""}
+                key={`${segment.sourceId || "active"}-${segment.start}-${segment.end}-${index}`}
+                draggable={!isExporting}
+                onClick={() => active && onSelectSegment(index)}
+                onDragStart={(event) => {
+                  setDraggedIndex(active ? index : null);
+                  event.dataTransfer.setData(active ? "application/x-timeline-segment" : "application/x-timeline-part", String(index));
+                }}
+                onDragEnd={() => setDraggedIndex(null)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => handleDrop(event, active ? index : segments.length)}
+              >
 
-            {/* Index label for each video/audio to indicate its order in the timeline */}
-            <span
-              className={`timeline-index timeline-index--${getTimelineMediaType(segment)}`}
-              aria-label={`${getTimelineMediaLabel(segment, t)} ${getTimelineIndexLabel(segment, itemIndex)}`}
-              title={getTimelineMediaLabel(segment, t)}
-            >
-              <span className="timeline-index-number">{getTimelineIndexLabel(segment, itemIndex)}</span>
-              <span className="timeline-media-icon" aria-hidden="true">{getTimelineMediaIcon(segment)}</span>
-            </span>
-
-
-            <div className="timeline-item-actions">
-              {active ? (
-                <>
-                  {/* Export Audio Only Button if it's a video segment */}
-                  {!segment.audioOnly ? (
-                    <button type="button" className="ghost-button" onClick={(event) => { event.stopPropagation(); onExtractSegmentAudio(index); }} disabled={isExporting}>
-                      {t("exportAudioOnly")}
-                    </button>
+                <td>{String(itemIndex + 1).padStart(2, "0")}</td>
+                
+                <td className="timeline-file-cell">
+                  <strong>{getFrameNumber(segment, itemIndex)}</strong>
+                  {getTimelineMediaType(segment) === "video" ? (
+                    <span className="timeline-file-video-icon" aria-label={t("videoSegment")} title={t("videoSegment")}>▶</span>
                   ) : null}
 
-                  {/* Delete Button */}
-                  <button type="button" className="ghost-button timeline-item-delete" onClick={(event) => { event.stopPropagation(); onDeleteSegment(index); }} disabled={isExporting}>
-                    {t("removeFromTimeline")}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button type="button" className="ghost-button" onClick={() => onInsertTimelinePart(segment, index)} disabled={isExporting}>
-                    {t("insert")}
-                  </button>
-                  <button type="button" className="timeline-item-delete" onClick={() => onDeleteTimelinePart(index)} disabled={isExporting}>
-                    {t("delete")}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
+                  {getTimelineMediaType(segment) === "audio" ? (
+                    <span className="timeline-file-audio-icon" aria-label={t("audioSegment")} title={t("audioSegment")}>♫</span>
+                  ) : null}
 
-        {!segments.length && !timelineParts.length ? <div className="timeline-empty">{t("noSegments")}</div> : null}
+                  {getTimelineMediaType(segment) === "image" ? (
+                    <span className="timeline-file-image-icon" aria-label={t("imageSegment")} title={t("imageSegment")}>🖼️</span>
+                  ) : null}
+                </td>
+
+                <td className="timeline-table-actions">
+                  {active ? (
+                    <>
+                      {!segment.audioOnly ? (
+                        <button type="button" className="ghost-button" onClick={(event) => { event.stopPropagation(); onExtractSegmentAudio(index); }} disabled={isExporting}>
+                          {t("exportAudioOnly")}
+                        </button>
+                      ) : null}
+                      <button type="button" className="ghost-button timeline-item-delete" onClick={(event) => { event.stopPropagation(); onDeleteSegment(index); }} disabled={isExporting}>
+                        {t("delete")}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" className="ghost-button" onClick={(event) => { event.stopPropagation(); onExtractSegmentAudio(index); }} disabled={isExporting}>
+                        {t("exportAudioOnly")}
+                      </button>
+                      <button type="button" className="timeline-item-delete" onClick={() => onDeleteTimelinePart(index)} disabled={isExporting}>
+                        {t("delete")}
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!timelineItems.length ? <div className="timeline-empty">{t("noSegments")}</div> : null}
       </div>
 
       <div className="clip-bank-panel">

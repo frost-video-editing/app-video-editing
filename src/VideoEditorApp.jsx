@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   clamp,
   segmentDuration,
   timelineDuration,
+  timelineSegmentAtTime,
   normalizeRange,
   formatVideoTime,
   splitSegmentsAtTimelinePositions
@@ -12,7 +13,8 @@ import CropEditor from "./components/CropEditor.jsx";
 import LoadingIndicator from "./components/LoadingIndicator.jsx";
 import ExportScreen from "./components/Export.jsx";
 import OperationLogPanel from "./components/log/OperationLogPanel.jsx";
-import SettingsModal from "./components/SettingsModal.jsx";
+import SourceTable from "./components/SourceTable.jsx";
+import SettingsModal from "./components/setting/SettingsModal.jsx";
 import useShortcuts from "./hooks/useShortcuts";
 import usePreviewBounds, {
   usePlayheadPreview,
@@ -29,6 +31,8 @@ import useTimelineEditingActions, {
 import useExportDialogActions, { useExportProgress } from "./hooks/useExportDialogActions.jsx";
 import useVideoExport from "./hooks/useVideoExport.jsx";
 import useLanguage from "./hooks/useLanguage.jsx";
+import { open as openExternalUrl } from "@tauri-apps/plugin-shell";
+import { isTauriRuntime } from "./tauri/editorApi.js";
 import ButtonContent from "./components/button/button-content";
 import { CropControls } from "./components/button/crop.jsx";
 import { editorMessages } from "./lib/editorMessages.js";
@@ -51,9 +55,13 @@ export default function VideoEditorApp() {
   const [sourcePath, setSourcePath] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [sourceName, setSourceName] = useState("");
+  const [sources, setSources] = useState([]);
+  const [pendingSourceRemoval, setPendingSourceRemoval] = useState(null);
+  const sourcePathsRef = useRef(new Set());
 
   const [metadata, setMetadata] = useState({ duration: 0, width: 0, height: 0, hasAudio: false });
   const [segments, setSegments] = useState([]);
+  const previewSourceUrl = segments.length > 0 ? sourceUrl : "";
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(null);
   const [selectionStart, setSelectionStart] = useState(0);
   const [selectionEnd, setSelectionEnd] = useState(0);
@@ -105,7 +113,7 @@ export default function VideoEditorApp() {
   } = useOperationLogs();
   const previewBounds = usePreviewBounds({
     stageRef: previewStageRef,
-    sourceUrl,
+    sourceUrl: previewSourceUrl,
     width: metadata.width,
     height: metadata.height
   });
@@ -178,7 +186,7 @@ export default function VideoEditorApp() {
     handlePreviewPause
   } = usePreviewPlayback({
     videoRef: previewVideoRef,
-    sourceUrl,
+    sourceUrl: previewSourceUrl,
     duration: metadata.duration,
     segments,
     playhead,
@@ -289,11 +297,23 @@ export default function VideoEditorApp() {
     clearLoadCompletionTimeout,
     stopLoadingOverlay
   } = useLoadingOverlay();
-  const { handleChooseSource } = useSourceLoader({
+  const registerSource = useCallback((source) => {
+    if (sourcePathsRef.current.has(source.filePath)) {
+      showTimelineToast(t("sameFile"), "error");
+      return false;
+    }
+    sourcePathsRef.current.add(source.filePath);
+    setSources((current) => {
+      return [...current, { ...source, id: source.filePath }];
+    });
+    return true;
+  }, [showTimelineToast, t]);
+  const { loadSource, handleChooseSource } = useSourceLoader({
     editorApi,
     setSourcePath,
     setSourceUrl,
     setSourceName,
+    registerSource,
     setMetadata,
     setSegments,
     setSelectionStart,
@@ -319,6 +339,76 @@ export default function VideoEditorApp() {
     stopLoadingOverlay,
     messages
   });
+  const handleSelectSource = (source) => {
+    loadSource(source);
+  };
+  const removeSource = (source) => {
+    const remainingSources = sources.filter((item) => item.filePath !== source.filePath);
+    sourcePathsRef.current.delete(source.filePath);
+    setSources(remainingSources);
+    
+    setSegments((current) => current.filter((segment) => (
+      segment.sourceId !== source.id && segment.filePath !== source.filePath
+    )));
+    
+    setTimelineParts((current) => current.filter((segment) => (
+      segment.sourceId !== source.id && segment.filePath !== source.filePath
+    )));
+
+    setSelectedSegmentIndex(null);
+    if (!remainingSources.length) {
+      setSourcePath("");
+      setSourceUrl("");
+      setSourceName("");
+      setMetadata({ duration: 0, width: 0, height: 0, hasAudio: false });
+      setSegments([]);
+      setSelectionStart(0);
+      setSelectionEnd(0);
+      setPlayheadWithPreview(0);
+      setTimelineParts([]);
+      setOutputPath("");
+      setCrop(emptyCrop);
+      resetCropSelection();
+      return;
+    }
+    if (source.filePath === sourcePath) {
+      loadSource(remainingSources[0]);
+    }
+  };
+  const handleRemoveSource = (source) => {
+    const sourceHasTimelineItems = [...segments, ...timelineParts].some((segment) => (
+      segment.sourceId === source.id || segment.filePath === source.filePath
+    ));
+    if (sourceHasTimelineItems) {
+      setPendingSourceRemoval(source);
+      return;
+    }
+    removeSource(source);
+  };
+  const handleConfirmSourceRemoval = () => {
+    if (!pendingSourceRemoval) return;
+    const source = pendingSourceRemoval;
+    setPendingSourceRemoval(null);
+    removeSource(source);
+  };
+  const handleAddSourceToTimeline = (source) => {
+    const duration = Math.max(0.1, Number(source.info?.duration) || (source.mediaType === "image" ? 5 : 0));
+    if (!duration) {
+      showTimelineToast(t("mediaHasNoDuration"), "error");
+      return;
+    }
+    setSegments((current) => [...current, {
+      start: 0,
+      end: duration,
+      mediaType: source.mediaType,
+      mimeType: source.info?.mimeType,
+      filePath: source.filePath,
+      fileUrl: source.fileUrl,
+      fileName: source.fileName,
+      sourceId: source.id
+    }]);
+    showTimelineToast(t("addedToTimeline", source.fileName));
+  };
   const { handleChooseOutput, handleChooseOutputFolder, handleOpenExportConfirm, handleCloseExportConfirm } = useExportDialogActions({
     editorApi,
     sourceName,
@@ -345,6 +435,7 @@ export default function VideoEditorApp() {
     crop,
     previewBounds,
     cropFormUnit,
+    metadata,
     setCrop,
     setIsCropPreviewLocked,
     pushUndoSnapshot,
@@ -382,6 +473,8 @@ export default function VideoEditorApp() {
 
     return getCroppedPreviewVideoStyle(crop);
   }, [crop, hasCrop, isCropPreviewLocked]);
+
+  const isPreviewAudioOnly = Boolean(timelineSegmentAtTime(segments, playhead)?.audioOnly);
 
   const previewViewportStyle = useMemo(() => {
     if (!isCropPreviewLocked || !hasCrop || !previewBounds) {
@@ -518,6 +611,8 @@ export default function VideoEditorApp() {
         onClearLogs={() => {
           clearOperationLogs();
         }}
+        language={language}
+        t={t}
       />
     );
   }
@@ -598,8 +693,10 @@ export default function VideoEditorApp() {
       <section className="hero card">
         <div className="hero-head">
           <div>
-            <p className="eyebrow">Video Editing Studio</p>
-            <h1>Video Editor</h1>
+            <h1 className="brand-title">
+              <span className="brand-title-icon" aria-hidden="true">❄</span>
+              <span>Frosty Editor</span>
+            </h1>
             <p>{status}</p>
           </div>
 
@@ -639,24 +736,45 @@ export default function VideoEditorApp() {
               onOpen={() => setIsShowingLogViewer(true)}
               onClose={() => setIsShowingLogViewer(false)}
               onClearLogs={() => setOperationLogs([])}
+              language={language}
+              t={t}
             />
           </div>
         </div>
 
-        <div className="status-strip">
-          <div>
-            <span>{t("source")}</span>
-            <strong>{sourceName || t("notSelected")}</strong>
+        {/* Video file source table */}
+        <SourceTable
+          sources={sources}
+          activeSourcePath={sourcePath}
+          onSelect={handleSelectSource}
+          onRemove={handleRemoveSource}
+          onAdd={handleAddSourceToTimeline}
+          t={t}
+        />
+        {pendingSourceRemoval ? (
+          <div className="export-confirm-overlay" role="dialog" aria-modal="true" aria-label={t("removeSourceWithSegmentsTitle")}>
+            <div className="export-confirm-dialog source-remove-confirm-dialog card">
+              <div className="panel-head">
+                <div>
+                  <p className="eyebrow">Warning</p>
+                  <h2>{t("removeSourceWithSegmentsTitle")}</h2>
+                </div>
+              </div>
+              <div className="export-confirm-body">
+                <p>{t("removeSourceWithSegmentsConfirm")}</p>
+                <strong>{pendingSourceRemoval.fileName}</strong>
+              </div>
+              <div className="action-row export-confirm-actions">
+                <button type="button" className="ghost-button timeline-item-delete" onClick={handleConfirmSourceRemoval}>
+                  {t("delete")}
+                </button>
+                <button type="button" className="ghost-button" onClick={() => setPendingSourceRemoval(null)}>
+                  {t("cancel")}
+                </button>
+              </div>
+            </div>
           </div>
-          <div>
-            <span>{t("duration")}</span>
-            <strong>{formatVideoTime(metadata.duration) || "-"}</strong>
-          </div>
-          <div>
-            <span>{t("resolution")}</span>
-            <strong>{metadata.width && metadata.height ? `${metadata.width} × ${metadata.height}` : "-"}</strong>
-          </div>
-        </div>
+        ) : null}
       </section>
 
       <section className="editor-grid">
@@ -672,11 +790,12 @@ export default function VideoEditorApp() {
           <CropEditor
             stageRef={previewStageRef}
             videoRef={previewVideoRef}
-            sourceUrl={sourceUrl}
+            sourceUrl={previewSourceUrl}
             isCropSelecting={isCropSelecting}
             previewBounds={previewBounds}
             previewViewportStyle={previewViewportStyle}
             previewVideoStyle={previewVideoStyle}
+            isPreviewAudioOnly={isPreviewAudioOnly}
             currentCropBoxStyle={currentCropBoxStyle}
             draftCropBoxStyle={draftCropBoxStyle}
             hasCrop={hasCrop}
@@ -835,7 +954,8 @@ export default function VideoEditorApp() {
         handleExportCropPresets,
         handleImportCropPresets,
         pendingDelete,
-        hasCrop
+        hasCrop,
+        t
       }} />
 
     </article>
@@ -883,16 +1003,22 @@ export default function VideoEditorApp() {
         </aside>
       </section>
 
-      If you find this app useful, please consider supporting its development. 
-      <p>Your support helps maintain and improve the app.</p>
-        <p>Support: <a
-          href="https://github.com/sponsors/KFrost-Sponsor"
-          onClick={(e) => { e.preventDefault(); openExternalUrl('https://github.com/sponsors/KFrost-Sponsor'); }}
+      <p className="support-link">
+        Support: <a
+          title="GitHub Sponsors"
+          onClick={(e) => {
+            e.preventDefault();
+            if (isTauriRuntime()) {
+              openExternalUrl("https://github.com/sponsors/KFrost-Sponsor").catch((error) => {
+                console.error("Failed to open external link", error);
+              });
+              return;
+            }
+            window.open("https://github.com/sponsors/KFrost-Sponsor", "_blank", "noopener,noreferrer");
+          }}
           rel="noopener noreferrer"
           style={{ color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}
-        >
-          GitHub Sponsors
-        </a>
+        >GitHub Sponsors</a>
       </p>
     </main>
     </>

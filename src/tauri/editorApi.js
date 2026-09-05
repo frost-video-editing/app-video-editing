@@ -29,17 +29,17 @@ export async function installTauriEditorApi() {
   const editorApi = {
     __tauri: true,
 
-    // Returns { filePath, fileUrl, fileName }; fileUrl is built with
+    // Returns an array of { filePath, fileUrl, fileName }; fileUrl is built with
     // convertFileSrc so the <video> element can load it via Tauri's
     // asset protocol.
     async selectSource() {
       const result = await invoke("select_source");
-      if (!result) return null;
-      return {
-        filePath: result.filePath,
-        fileName: result.fileName,
-        fileUrl: convertFileSrc(result.filePath)
-      };
+      if (!result?.length) return [];
+      return result.map((item) => ({
+        filePath: item.filePath,
+        fileName: item.fileName,
+        fileUrl: convertFileSrc(item.filePath)
+      }));
     },
 
     async backupSource(payload) {
@@ -74,7 +74,7 @@ export async function installTauriEditorApi() {
         return await invoke("export_video", { payload });
       } catch (raw) {
         const message = typeof raw === "string" ? raw : raw?.message || "";
-        const error = new Error(message || "動画出力に失敗しました。");
+        const error = new Error(message || "Video export failed.");
         if (message === "EXPORT_CANCELLED") {
           error.code = "EXPORT_CANCELLED";
         }

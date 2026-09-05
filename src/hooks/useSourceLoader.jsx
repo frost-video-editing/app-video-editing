@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createFullTimeline } from "../lib/videoTimeline.js";
 import { createLoadLog } from "../lib/operationLog.js";
 import { editorMessages } from "../lib/editorMessages.js";
 import useLanguage from "./useLanguage.jsx";
+
+function getMediaType(fileName = "") {
+  const extension = fileName.split(".").pop()?.toLowerCase();
+  if (["mp3", "wav", "m4a", "aac", "flac", "ogg"].includes(extension)) return "audio";
+  if (["jpg", "jpeg", "png", "webp", "gif", "bmp"].includes(extension)) return "image";
+  return "video";
+}
 
 // Owns source selection, metadata loading, and initial timeline setup.
 export default function useSourceLoader({
@@ -10,6 +16,7 @@ export default function useSourceLoader({
   setSourcePath,
   setSourceUrl,
   setSourceName,
+  registerSource,
   setMetadata,
   setSegments,
   setSelectionStart,
@@ -61,6 +68,7 @@ export default function useSourceLoader({
     try {
       setLoadingProgress(10);
       setLoadingMessage(t("loadingVideoInfo"));
+      const mediaType = result.mediaType || getMediaType(result.fileName || result.filePath);
       const info = result.info || (await editorApi.probeVideo(result.filePath));
 
       setLoadingProgress(40);
@@ -68,6 +76,21 @@ export default function useSourceLoader({
       setLoadingIndeterminate(false);
 
       const nextSourceName = result.fileName || result.filePath.split(/[\\/]/).pop() || "video";
+      const wasRegistered = registerSource?.({
+        filePath: result.filePath,
+        fileUrl: result.fileUrl,
+        fileName: nextSourceName,
+        info,
+        mediaType
+      });
+      if (wasRegistered === false) {
+        stopLoadingOverlay();
+        return;
+      }
+      if (mediaType !== "video") {
+        stopLoadingOverlay();
+        return;
+      }
       setSourcePath(result.filePath);
       setSourceUrl(result.fileUrl);
       setSourceName(nextSourceName);
@@ -75,12 +98,12 @@ export default function useSourceLoader({
       setLoadingProgress(70);
       setLoadingMessage(t("buildingTimeline"));
       setMetadata(info);
-      setSegments(createFullTimeline(info.duration));
+      
+      // Loading a source prepares it for editing but does not place it on the timeline.
       setSelectionStart(0);
       setSelectionEnd(info.duration);
       setPlayheadWithPreview(0);
       setClipboard([]);
-      setTimelineParts([]);
       setOutputPath("");
       setCrop(emptyCrop);
       clearUndoHistory();
@@ -102,7 +125,7 @@ export default function useSourceLoader({
       messages.setErrorMessage(error?.message || editorMessages.videoLoadingFailed);
       messages.setStatusMessage(editorMessages.loadFailed);
     }
-  }, [clearLoadCompletionTimeout, clearUndoHistory, editorApi, emptyCrop, isOperationTypeEnabled, loadCompletionTimeoutRef, messages, resetCropSelection, setClipboard, setCrop, setIsLoading, setLoadingIndeterminate, setLoadingMessage, setLoadingProgress, setMetadata, setOperationLogs, setOutputPath, setPlayheadWithPreview, setSelectionEnd, setSelectionStart, setSegments, setSourceName, setSourcePath, setSourceUrl, setTimelineParts, stopLoadingOverlay]);
+  }, [clearLoadCompletionTimeout, clearUndoHistory, editorApi, emptyCrop, isOperationTypeEnabled, loadCompletionTimeoutRef, messages, registerSource, resetCropSelection, setClipboard, setCrop, setIsLoading, setLoadingIndeterminate, setLoadingMessage, setLoadingProgress, setMetadata, setOperationLogs, setOutputPath, setPlayheadWithPreview, setSelectionEnd, setSelectionStart, setSegments, setSourceName, setSourcePath, setSourceUrl, setTimelineParts, stopLoadingOverlay]);
 
   const handleChooseSource = useCallback(async () => {
     if (!editorApi) {
@@ -117,31 +140,48 @@ export default function useSourceLoader({
     loadStartTimeRef.current = Date.now();
 
     try {
-      const result = await editorApi.selectSource();
-      if (!result) {
+      const results = await editorApi.selectSource();
+      if (!results?.length) {
         stopLoadingOverlay();
         messages.setStatusMessage(t("videoSelectionCancelled"));
         return;
       }
 
-      if (editorApi.backupSource && backupSourceOnImport) {
+      let activeVideoLoaded = false;
+      for (const result of results) {
+        const mediaType = getMediaType(result.fileName || result.filePath);
+        if (editorApi.backupSource && backupSourceOnImport) {
+          try {
+            const backup = await editorApi.backupSource(result.filePath);
+            if (backup?.filePath) messages.setStatusMessage(t("backupSaved"));
+          } catch (error) {
+            console.error("Failed to save source backup", error);
+            messages.setErrorMessage(t("backupFailed"));
+          }
+        }
+
+        if (mediaType === "video" && !activeVideoLoaded) {
+          await loadSource({ ...result, mediaType });
+          activeVideoLoaded = true;
+          continue;
+        }
+
         try {
-          const backup = await editorApi.backupSource(result.filePath);
-          if (backup?.filePath) messages.setStatusMessage(t("backupSaved"));
+          const info = await editorApi.probeVideo(result.filePath);
+          registerSource?.({ ...result, info, mediaType });
         } catch (error) {
-          console.error("Failed to save source backup", error);
-          messages.setErrorMessage(t("backupFailed"));
+          console.error("Failed to probe media source", result.filePath, error);
+          messages.setErrorMessage(error?.message || t("videoLoadingFailed"));
         }
       }
-
-      await loadSource(result);
+      if (!activeVideoLoaded) stopLoadingOverlay();
     } catch (error) {
       stopLoadingOverlay();
       setLoadingProgress(0);
       messages.setErrorMessage(error?.message || editorMessages.videoSelectionFailed);
       messages.setStatusMessage(editorMessages.loadFailed);
     }
-  }, [backupSourceOnImport, editorApi, loadSource, loadStartTimeRef, messages, setIsLoading, setLoadingIndeterminate, setLoadingMessage, setLoadingProgress, stopLoadingOverlay]);
+  }, [backupSourceOnImport, editorApi, loadSource, loadStartTimeRef, messages, registerSource, setIsLoading, setLoadingIndeterminate, setLoadingMessage, setLoadingProgress, stopLoadingOverlay, t]);
 
   return { loadSource, handleChooseSource };
 }
