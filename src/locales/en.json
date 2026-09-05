@@ -2,6 +2,13 @@
   "chooseVideo": "Choose video",
   "shortcut": "Shortcuts",
   "source": "Source",
+  "sourceList": "Video sources",
+  "sourceNumber": "No.",
+  "fileName": "File name",
+  "addVideo": "Add video",
+  "noSources": "No video sources",
+  "sameFile": "This file is already loaded in the source list.",
+  "importMoreVideosHint": "If you'd like to import more videos, please use the \"Choose Video\" button above.",
   "notSelected": "Not selected",
   "duration": "Duration",
   "resolution": "Resolution",
@@ -35,6 +42,8 @@
   "openSettings": "Open settings",
   "preview": "Preview",
   "exporting": "Exporting...",
+  "appErrorTitle": "The application could not be displayed",
+  "appErrorDetails": "Check the developer console for details.",
   "exportHint": "Open export confirmation from the button on the right.",
   "startDesktopShell": "Start the desktop app",
   "desktopShellOnly": "This app requires local FFmpeg and cannot run in a browser alone.",
@@ -189,6 +198,7 @@
   "gpuFirst": "Prefer GPU",
   "preserveResolution": "Preserve the original resolution after cropping",
   "backupSourceOnImport": "Save a backup of the source file when importing a video",
+  "backupSourceOnImportDescription": "Keep a copy of the original video for editing",
   "scalingAlgorithm": "Scaling algorithm",
   "volumeLabel": "Volume",
   "normalizeAudio": "Normalize audio",
@@ -215,6 +225,14 @@
   ,"numericCrop": "Enter values",
   "apply": "Apply",
   "savedPresets": "Saved presets"
+  ,"cropLeftPercent": "left %"
+  ,"cropLeftPixels": "left (px)"
+  ,"cropTopPercent": "top %"
+  ,"cropTopPixels": "top (px)"
+  ,"cropWidthPercent": "width %"
+  ,"cropWidthPixels": "width (px)"
+  ,"cropHeightPercent": "height %"
+  ,"cropHeightPixels": "height (px)"
   ,"items": "items",
   "loading": "Loading..."
   ,"cropLocked": "Locked the preview to the crop area.",

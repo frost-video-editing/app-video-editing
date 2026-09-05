@@ -74,7 +74,7 @@ export async function installTauriEditorApi() {
         return await invoke("export_video", { payload });
       } catch (raw) {
         const message = typeof raw === "string" ? raw : raw?.message || "";
-        const error = new Error(message || "動画出力に失敗しました。");
+        const error = new Error(message || "Video export failed.");
         if (message === "EXPORT_CANCELLED") {
           error.code = "EXPORT_CANCELLED";
         }

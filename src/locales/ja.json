@@ -3,6 +3,13 @@
   "shortcutSettings": "ショートカットキーの設定",
   "shortcut": "ショートカット",
   "source": "ソース",
+  "sourceList": "動画ソース",
+  "sourceNumber": "番号",
+  "fileName": "ファイル名",
+  "addVideo": "動画を追加",
+  "noSources": "動画ソースがありません",
+  "sameFile": "同じファイルが既に読み込まれています",
+  "importMoreVideosHint": "さらに動画をインポートしたい場合は、上の「動画を選択」ボタンを使用してください。",
   "notSelected": "未選択",
   "duration": "動画時間",
   "resolution": "解像度",
@@ -36,6 +43,8 @@
   "openSettings": "設定を開く",
   "preview": "プレビュー",
   "exporting": "出力中...",
+  "appErrorTitle": "アプリの表示中にエラーが発生しました",
+  "appErrorDetails": "詳細は開発者コンソールを確認してください。",
   "exportHint": "右側のボタンから出力確認を開きます。",
   "startDesktopShell": "デスクトップ版で起動してください",
   "desktopShellOnly": "このアプリはローカルの FFmpeg 実行を使うため、ブラウザ単体では動きません。",
@@ -191,6 +200,7 @@
   "gpuFirst": "GPU優先",
   "preserveResolution": "Crop後も元の解像度を維持する",
   "backupSourceOnImport": "動画の読み込み時に元ファイルのバックアップを保存する",
+  "backupSourceOnImportDescription": "編集用に元動画のコピーを保存します",
   "scalingAlgorithm": "拡大補間",
   "volumeLabel": "音量",
   "normalizeAudio": "音声を正規化する",
@@ -216,6 +226,14 @@
   ,"numericCrop": "数値で指定",
   "apply": "適用",
   "savedPresets": "保存済み presets"
+  ,"cropLeftPercent": "左 %"
+  ,"cropLeftPixels": "左 (px)"
+  ,"cropTopPercent": "上 %"
+  ,"cropTopPixels": "上 (px)"
+  ,"cropWidthPercent": "幅 %"
+  ,"cropWidthPixels": "幅 (px)"
+  ,"cropHeightPercent": "高さ %"
+  ,"cropHeightPixels": "高さ (px)"
   ,"items": "件",
   "loading": "読み込み中..."
   ,"cropLocked": "crop 範囲だけをプレビューに固定しました。",

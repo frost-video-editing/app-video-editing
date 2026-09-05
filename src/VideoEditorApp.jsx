@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   clamp,
   segmentDuration,
@@ -12,7 +12,8 @@ import CropEditor from "./components/CropEditor.jsx";
 import LoadingIndicator from "./components/LoadingIndicator.jsx";
 import ExportScreen from "./components/Export.jsx";
 import OperationLogPanel from "./components/log/OperationLogPanel.jsx";
-import SettingsModal from "./components/SettingsModal.jsx";
+import SourceTable from "./components/SourceTable.jsx";
+import SettingsModal from "./components/setting/SettingsModal.jsx";
 import useShortcuts from "./hooks/useShortcuts";
 import usePreviewBounds, {
   usePlayheadPreview,
@@ -51,6 +52,7 @@ export default function VideoEditorApp() {
   const [sourcePath, setSourcePath] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [sourceName, setSourceName] = useState("");
+  const [sources, setSources] = useState([]);
 
   const [metadata, setMetadata] = useState({ duration: 0, width: 0, height: 0, hasAudio: false });
   const [segments, setSegments] = useState([]);
@@ -289,11 +291,22 @@ export default function VideoEditorApp() {
     clearLoadCompletionTimeout,
     stopLoadingOverlay
   } = useLoadingOverlay();
-  const { handleChooseSource } = useSourceLoader({
+  const registerSource = useCallback((source) => {
+    if (sources.some((item) => item.filePath === source.filePath)) {
+      showTimelineToast(t("sameFile"), "error");
+      return false;
+    }
+    setSources((current) => {
+      return [...current, { ...source, id: source.filePath }];
+    });
+    return true;
+  }, [showTimelineToast, sources, t]);
+  const { loadSource, handleChooseSource } = useSourceLoader({
     editorApi,
     setSourcePath,
     setSourceUrl,
     setSourceName,
+    registerSource,
     setMetadata,
     setSegments,
     setSelectionStart,
@@ -319,6 +332,30 @@ export default function VideoEditorApp() {
     stopLoadingOverlay,
     messages
   });
+  const handleSelectSource = (source) => {
+    loadSource(source);
+  };
+  const handleRemoveSource = (source) => {
+    setSources((current) => current.filter((item) => item.filePath !== source.filePath));
+    if (source.filePath !== sourcePath) return;
+    const remainingSource = sources.find((item) => item.filePath !== source.filePath);
+    if (remainingSource) {
+      loadSource(remainingSource);
+      return;
+    }
+    setSourcePath("");
+    setSourceUrl("");
+    setSourceName("");
+    setMetadata({ duration: 0, width: 0, height: 0, hasAudio: false });
+    setSegments([]);
+    setSelectionStart(0);
+    setSelectionEnd(0);
+    setPlayheadWithPreview(0);
+    setTimelineParts([]);
+    setOutputPath("");
+    setCrop(emptyCrop);
+    resetCropSelection();
+  };
   const { handleChooseOutput, handleChooseOutputFolder, handleOpenExportConfirm, handleCloseExportConfirm } = useExportDialogActions({
     editorApi,
     sourceName,
@@ -643,20 +680,15 @@ export default function VideoEditorApp() {
           </div>
         </div>
 
-        <div className="status-strip">
-          <div>
-            <span>{t("source")}</span>
-            <strong>{sourceName || t("notSelected")}</strong>
-          </div>
-          <div>
-            <span>{t("duration")}</span>
-            <strong>{formatVideoTime(metadata.duration) || "-"}</strong>
-          </div>
-          <div>
-            <span>{t("resolution")}</span>
-            <strong>{metadata.width && metadata.height ? `${metadata.width} × ${metadata.height}` : "-"}</strong>
-          </div>
-        </div>
+        {/* Video file source table */}
+        <SourceTable
+          sources={sources}
+          activeSourcePath={sourcePath}
+          onSelect={handleSelectSource}
+          onRemove={handleRemoveSource}
+          onAdd={handleChooseSource}
+          t={t}
+        />
       </section>
 
       <section className="editor-grid">
@@ -835,7 +867,8 @@ export default function VideoEditorApp() {
         handleExportCropPresets,
         handleImportCropPresets,
         pendingDelete,
-        hasCrop
+        hasCrop,
+        t
       }} />
 
     </article>

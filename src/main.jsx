@@ -2,6 +2,8 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import VideoEditorApp from "./VideoEditorApp.jsx";
 import { installTauriEditorApi, isTauriRuntime } from "./tauri/editorApi.js";
+import ja from "./locales/ja.json";
+import en from "./locales/en.json";
 import "./styles/video-editor.css";
 
 class AppErrorBoundary extends React.Component {
@@ -18,10 +20,11 @@ class AppErrorBoundary extends React.Component {
   render() {
     if (!this.state.error) return this.props.children;
 
+    const language = typeof window !== "undefined" && window.localStorage.getItem("videoEditor.language") === "en" ? en : ja;
     return (
       <main className="app-error-screen">
-        <h1>アプリの表示中にエラーが発生しました</h1>
-        <p>詳細は開発者コンソールを確認してください。</p>
+        <h1>{language.appErrorTitle}</h1>
+        <p>{language.appErrorDetails}</p>
         <pre>{this.state.error.message}</pre>
       </main>
     );

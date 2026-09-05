@@ -1,5 +1,4 @@
 import React, { useRef } from "react";
-import useLanguage from "../../hooks/useLanguage.jsx";
 
 export function CropControls({
   previewBounds,
@@ -19,9 +18,9 @@ export function CropControls({
   handleExportCropPresets,
   handleImportCropPresets,
   pendingDelete,
-  hasCrop
+  hasCrop,
+  t
 }) {
-  const { t } = useLanguage();
   const importInputRef = useRef(null);
   return (
     <div className="preview-crop-coords">
@@ -39,19 +38,19 @@ export function CropControls({
             </div>
 
             <label style={{ display: "flex", flexDirection: "column" }}>
-              {cropFormUnit === "%" ? "left %" : "left (px)"}
+              {t(cropFormUnit === "%" ? "cropLeftPercent" : "cropLeftPixels")}
               <input type="number" value={cropForm.left} onChange={(e) => handleCropFormChange("left", e.target.value)} style={{ width: 80 }} />
             </label>
             <label style={{ display: "flex", flexDirection: "column" }}>
-              {cropFormUnit === "%" ? "top %" : "top (px)"}
+              {t(cropFormUnit === "%" ? "cropTopPercent" : "cropTopPixels")}
               <input type="number" value={cropForm.top} onChange={(e) => handleCropFormChange("top", e.target.value)} style={{ width: 80 }} />
             </label>
             <label style={{ display: "flex", flexDirection: "column" }}>
-              {cropFormUnit === "%" ? "width %" : "width (px)"}
+              {t(cropFormUnit === "%" ? "cropWidthPercent" : "cropWidthPixels")}
               <input type="number" value={cropForm.width} onChange={(e) => handleCropFormChange("width", e.target.value)} style={{ width: 80 }} />
             </label>
             <label style={{ display: "flex", flexDirection: "column" }}>
-              {cropFormUnit === "%" ? "height %" : "height (px)"}
+              {t(cropFormUnit === "%" ? "cropHeightPercent" : "cropHeightPixels")}
               <input type="number" value={cropForm.height} onChange={(e) => handleCropFormChange("height", e.target.value)} style={{ width: 80 }} />
             </label>
             <div style={{ display: "flex", alignItems: "flex-end" }}>

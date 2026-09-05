@@ -1,0 +1,84 @@
+.source-panel {
+  margin-top: 18px;
+  padding: 18px;
+}
+
+.source-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.source-panel-head h2 {
+  margin: 0;
+}
+
+.source-panel-head .eyebrow {
+  margin-bottom: 4px;
+}
+
+.source-table-wrapper {
+  overflow-x: auto;
+  margin-top: 14px;
+}
+
+.source-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--text);
+}
+
+.source-table th,
+.source-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.source-table thead {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.source-row--active {
+  background: rgba(82, 204, 241, 0.12);
+}
+
+.source-name-button {
+  max-width: min(520px, 60vw);
+  overflow: hidden;
+  padding: 0;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.source-name-button:hover {
+  color: var(--accent);
+}
+
+.source-table-empty {
+  padding: 18px 12px;
+  color: var(--muted);
+  text-align: center !important;
+}
+
+.source-remove-button {
+  min-width: 76px;
+}
+
+@media (max-width: 720px) {
+  .source-panel-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .source-name-button {
+    max-width: 44vw;
+  }
+}

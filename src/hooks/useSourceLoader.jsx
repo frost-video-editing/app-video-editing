@@ -10,6 +10,7 @@ export default function useSourceLoader({
   setSourcePath,
   setSourceUrl,
   setSourceName,
+  registerSource,
   setMetadata,
   setSegments,
   setSelectionStart,
@@ -68,6 +69,16 @@ export default function useSourceLoader({
       setLoadingIndeterminate(false);
 
       const nextSourceName = result.fileName || result.filePath.split(/[\\/]/).pop() || "video";
+      const wasRegistered = registerSource?.({
+        filePath: result.filePath,
+        fileUrl: result.fileUrl,
+        fileName: nextSourceName,
+        info
+      });
+      if (wasRegistered === false) {
+        stopLoadingOverlay();
+        return;
+      }
       setSourcePath(result.filePath);
       setSourceUrl(result.fileUrl);
       setSourceName(nextSourceName);
@@ -102,7 +113,7 @@ export default function useSourceLoader({
       messages.setErrorMessage(error?.message || editorMessages.videoLoadingFailed);
       messages.setStatusMessage(editorMessages.loadFailed);
     }
-  }, [clearLoadCompletionTimeout, clearUndoHistory, editorApi, emptyCrop, isOperationTypeEnabled, loadCompletionTimeoutRef, messages, resetCropSelection, setClipboard, setCrop, setIsLoading, setLoadingIndeterminate, setLoadingMessage, setLoadingProgress, setMetadata, setOperationLogs, setOutputPath, setPlayheadWithPreview, setSelectionEnd, setSelectionStart, setSegments, setSourceName, setSourcePath, setSourceUrl, setTimelineParts, stopLoadingOverlay]);
+  }, [clearLoadCompletionTimeout, clearUndoHistory, editorApi, emptyCrop, isOperationTypeEnabled, loadCompletionTimeoutRef, messages, registerSource, resetCropSelection, setClipboard, setCrop, setIsLoading, setLoadingIndeterminate, setLoadingMessage, setLoadingProgress, setMetadata, setOperationLogs, setOutputPath, setPlayheadWithPreview, setSelectionEnd, setSelectionStart, setSegments, setSourceName, setSourcePath, setSourceUrl, setTimelineParts, stopLoadingOverlay]);
 
   const handleChooseSource = useCallback(async () => {
     if (!editorApi) {
