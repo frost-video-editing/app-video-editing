@@ -12,3 +12,9 @@ If an error occurs during the loading of the UI, display a user-friendly message
 Please write comments in English for internationalization purposes.
 
 Also, I'd like you to write comments to explain how the functions work, what data they get and return.
+
+The error handling should be comprehensive, covering all possible failure points in the code to ensure that users are informed of issues and developers have sufficient information for debugging.
+
+Additionally, ensure that any asynchronous operations have proper error handling mechanisms, such as try-catch blocks or promise rejection handlers, to prevent unhandled exceptions from crashing the application.
+
+Finally, consider implementing a centralized error handling strategy, where all errors are captured, logged, and appropriately communicated to the user, to maintain consistency and improve maintainability across the codebase.
