@@ -163,6 +163,38 @@
   border-radius: 6px;
 }
 
+.settings-table select {
+  min-width: 180px;
+  padding: 8px 10px;
+  color: var(--text);
+  background: var(--bg-1);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+}
+
+.settings-table input[type="checkbox"] {
+  width: auto;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.settings-table-range-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 240px;
+}
+
+.settings-table-range-cell input[type="range"] {
+  width: min(260px, 100%);
+  accent-color: var(--accent);
+}
+
+.settings-table--video-export td:last-child {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .settings-table td:last-child button {
   width: 170px;
   box-sizing: border-box;

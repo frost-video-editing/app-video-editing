@@ -5,6 +5,11 @@ import { createExportLog } from "../lib/operationLog.js";
 import { editorMessages } from "../lib/editorMessages.js";
 import useLanguage from "./useLanguage.jsx";
 
+function joinOutputPath(folderPath, fileName) {
+  const separator = folderPath.includes("\\") ? "\\" : "/";
+  return `${folderPath.replace(/[\\/]$/, "")}${separator}${fileName}`;
+}
+
 // Owns the export request, progress initialization, and export notices.
 export default function useVideoExport({
   editorApi,
@@ -20,6 +25,7 @@ export default function useVideoExport({
   audioGainPercent,
   audioNormalize,
   audioOnly,
+  outputDirectoryPath,
   setOutputPath,
   setIsExporting,
   setIsExportConfirmOpen,
@@ -52,7 +58,9 @@ export default function useVideoExport({
     const suggestedName = audioOnly
       ? (sourceName || "edited-video.mp4").replace(/\.[^.]+$/, "-audio.mp4")
       : (sourceName || "edited-video.mp4");
-    const chosenOutput = outputPath || (await editorApi.selectOutput({ suggestedName }))?.filePath;
+    const chosenOutput = outputPath || (outputDirectoryPath
+      ? joinOutputPath(outputDirectoryPath, suggestedName)
+      : (await editorApi.selectOutput({ suggestedName }))?.filePath);
     if (!chosenOutput) return;
 
     setOutputPath(chosenOutput);
@@ -99,5 +107,5 @@ export default function useVideoExport({
       setIsExporting(false);
       resetExportOverlay();
     }
-  }, [audioGainPercent, audioNormalize, audioOnly, crop, cropScaleAlgorithm, editorApi, exportProfile, exportStartTimeRef, isOperationTypeEnabled, messages, metadata, outputPath, preserveCropResolution, resetExportOverlay, segments, setExportIndeterminate, setExportMessage, setExportProgress, setIsExportConfirmOpen, setIsExporting, setOperationLogs, setOutputPath, sourceName, sourcePath]);
+  }, [audioGainPercent, audioNormalize, audioOnly, crop, cropScaleAlgorithm, editorApi, exportProfile, exportStartTimeRef, isOperationTypeEnabled, messages, metadata, outputDirectoryPath, outputPath, preserveCropResolution, resetExportOverlay, segments, setExportIndeterminate, setExportMessage, setExportProgress, setIsExportConfirmOpen, setIsExporting, setOperationLogs, setOutputPath, sourceName, sourcePath]);
 }

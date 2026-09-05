@@ -14,9 +14,9 @@ export default function DownloadSettings({
   editorApi,
   onError,
   t,
-  outputPath,
+  outputDirectoryPath,
   isExporting,
-  onChooseOutput
+  onChooseOutputFolder
 }) {
   const handleChoosePath = async () => {
     if (!editorApi?.selectPresetOutput) {
@@ -57,12 +57,12 @@ export default function DownloadSettings({
             </tr>
             <tr>
               <th scope="row">{t("videoOutputPathLabel")}</th>
-              <td>{outputPath || t("notSet")}</td>
+              <td>{outputDirectoryPath || t("notSet")}</td>
               <td>
                 <OutputPathButton
-                  outputPath={outputPath}
+                  outputPath={outputDirectoryPath}
                   isExporting={isExporting}
-                  onChooseOutput={onChooseOutput}
+                  onChooseOutput={onChooseOutputFolder}
                   t={t}
                 />
               </td>

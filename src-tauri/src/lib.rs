@@ -272,6 +272,36 @@ async fn select_output(
 }
 
 #[tauri::command]
+async fn select_output_folder(
+    app: AppHandle,
+) -> Result<Option<FilePathResponse>, String> {
+    let downloads = app
+        .path()
+        .download_dir()
+        .unwrap_or_else(|_| PathBuf::from("."));
+
+    let app_for_dialog = app.clone();
+    let picked = tokio::task::spawn_blocking(move || {
+        app_for_dialog
+            .dialog()
+            .file()
+            .set_title("動画の出力フォルダを選択")
+            .set_directory(&downloads)
+            .blocking_pick_folder()
+    })
+    .await
+    .map_err(|e| format!("dialog task failed: {e}"))?;
+
+    let Some(picked) = picked else {
+        return Ok(None);
+    };
+    let path = filepath_to_pathbuf(picked).ok_or("Unsupported file path scheme")?;
+    Ok(Some(FilePathResponse {
+        file_path: path.to_string_lossy().to_string(),
+    }))
+}
+
+#[tauri::command]
 async fn select_preset_output(
     app: AppHandle,
 ) -> Result<Option<FilePathResponse>, String> {
@@ -589,6 +619,7 @@ pub fn run() {
             backup_source,
             probe_video,
             select_output,
+            select_output_folder,
             select_preset_output,
             write_preset_file,
             export_video,

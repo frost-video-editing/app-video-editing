@@ -57,6 +57,10 @@ export async function installTauriEditorApi() {
       return invoke("select_output", { payload: { suggestedName } });
     },
 
+    async selectOutputFolder() {
+      return invoke("select_output_folder");
+    },
+
     async selectPresetOutput(payload = {}) {
       return invoke("select_preset_output");
     },

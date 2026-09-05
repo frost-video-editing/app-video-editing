@@ -30,11 +30,8 @@ export function ExportConfirmDialog({
   crop,
   metadata,
   outputPath,
-  audioOnly,
-  setAudioOnly,
   isExporting,
   canExport,
-  onChooseOutput,
   onClose,
   onExport
 }) {
@@ -119,7 +116,6 @@ export function ExportConfirmDialog({
         </div>
 
         <div className="action-row export-confirm-actions">
-          <OutputPathButton outputPath={outputPath} isExporting={isExporting} onChooseOutput={onChooseOutput} t={t} />
           <button type="button" className="ghost-button" onClick={onClose} disabled={isExporting}>
             {t("cancel")}
           </button>

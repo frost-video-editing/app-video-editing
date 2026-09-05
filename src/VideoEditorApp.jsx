@@ -68,6 +68,10 @@ export default function VideoEditorApp() {
   const [selectedClipIndex, setSelectedClipIndex] = useState(null);
   const [cutMarkers, setCutMarkers] = useState([]); // array of { start, end }
   const [outputPath, setOutputPath] = useState("");
+  const [outputDirectoryPath, setOutputDirectoryPath] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem("videoEditor.outputDirectoryPath") || "";
+  });
   const [audioOnly, setAudioOnly] = useState(false);
   const [isExportConfirmOpen, setIsExportConfirmOpen] = useState(false);
   const [preserveCropResolution, setPreserveCropResolution] = useState(true);
@@ -166,6 +170,7 @@ export default function VideoEditorApp() {
     handlePreviewVideoReady,
     handlePreviewVideoWaiting,
     handlePreviewVideoError,
+    handlePreviewEnded,
     handlePreviewTimeUpdate,
     handleTogglePreviewPlayback,
     handleTogglePreviewSpeed,
@@ -176,6 +181,7 @@ export default function VideoEditorApp() {
     sourceUrl,
     duration: metadata.duration,
     segments,
+    playhead,
     onPlayheadChange: setPlayhead,
     setErrorText: messages.setErrorMessage,
     setStatus: messages.setStatusMessage
@@ -313,7 +319,7 @@ export default function VideoEditorApp() {
     stopLoadingOverlay,
     messages
   });
-  const { handleChooseOutput, handleOpenExportConfirm, handleCloseExportConfirm } = useExportDialogActions({
+  const { handleChooseOutput, handleChooseOutputFolder, handleOpenExportConfirm, handleCloseExportConfirm } = useExportDialogActions({
     editorApi,
     sourceName,
     sourcePath,
@@ -444,6 +450,7 @@ export default function VideoEditorApp() {
     audioGainPercent,
     audioNormalize,
     audioOnly,
+    outputDirectoryPath,
     setOutputPath,
     setIsExporting,
     setIsExportConfirmOpen,
@@ -576,8 +583,9 @@ export default function VideoEditorApp() {
         onError={(message) => showTimelineToast(message, "error")}
         cropPresetsExportPath={cropPresetsExportPath}
         setCropPresetsExportPath={setCropPresetsExportPath}
-        outputPath={outputPath}
-        onChooseOutput={handleChooseOutput}
+        outputDirectoryPath={outputDirectoryPath}
+        setOutputDirectoryPath={setOutputDirectoryPath}
+        onChooseOutputFolder={() => handleChooseOutputFolder(setOutputDirectoryPath)}
         isExporting={isExporting}
         audioGainPercent={audioGainPercent}
         setAudioGainPercent={setAudioGainPercent}
@@ -687,7 +695,7 @@ export default function VideoEditorApp() {
             onSeeked={handlePreviewTimeUpdate}
             onPlay={handlePreviewPlay}
             onPause={handlePreviewPause}
-            onEnded={handlePreviewPause}
+            onEnded={handlePreviewEnded}
             onLoadStart={handlePreviewVideoLoadStart}
             onLoadedMetadata={handlePreviewVideoReady}
             onLoadedData={handlePreviewVideoReady}

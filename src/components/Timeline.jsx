@@ -38,6 +38,34 @@ function parseTimeInput(value) {
   return null;
 }
 
+function getTimelineMediaType(segment) {
+  if (segment.audioOnly || segment.mediaType === "audio" || segment.mimeType?.startsWith("audio/")) return "audio";
+  if (segment.mediaType === "image" || segment.mimeType?.startsWith("image/")) return "image";
+  return "video";
+}
+
+function getTimelineMediaIcon(segment) {
+  const mediaType = getTimelineMediaType(segment);
+  return mediaType === "audio" ? "♫" : mediaType === "image" ? "▧" : "▶";
+}
+
+function getTimelineMediaLabel(segment, t) {
+  const mediaType = getTimelineMediaType(segment);
+  return mediaType === "audio" ? t("audioSegment") : mediaType === "image" ? t("imageSegment") : t("videoSegment");
+}
+
+function findMatchingAudioSourceIndex(segment, segments) {
+  if (!segment.audioSource) return -1;
+  return segments.findIndex((source) => (
+    source.start === segment.audioSource.start && source.end === segment.audioSource.end && !source.audioOnly
+  ));
+}
+
+function getTimelineDisplayNumber(segment, segments, fallbackNumber) {
+  const sourceIndex = findMatchingAudioSourceIndex(segment, segments);
+  return sourceIndex >= 0 ? sourceIndex + 1 : fallbackNumber;
+}
+
 function TimelineVisualizer({
   playhead = 0,
   selectionStart = 0,
@@ -197,7 +225,7 @@ function TimelineVisualizer({
           {safeSegments.reduce((items, segment, index) => {
             const duration = Math.max(0, Number(segment.end) - Number(segment.start));
             const widthPct = totalDuration > 0 ? (duration / totalDuration) * 100 : 0;
-            const segmentNumber = getSegmentNumber(segment);
+            const segmentNumber = getTimelineDisplayNumber(segment, safeSegments, getSegmentNumber(segment));
             const timelineStart = items.timelineCursor;
             const timelineEnd = timelineStart + duration;
             const isSelected = Number(selectionStart) === timelineStart && Number(selectionEnd) === timelineEnd;
@@ -216,13 +244,14 @@ function TimelineVisualizer({
             items.elements.push(
               <React.Fragment key={`segment-${index}-${segment.start}-${segment.end}`}>
                 <div
-                  className={`timeline-segment-block${isSelected ? " timeline-segment-block--selected" : ""}${isDragging ? " timeline-segment-block--dragging" : ""}`}
+                  className={`timeline-segment-block timeline-segment-block--${getTimelineMediaType(segment)}${isSelected ? " timeline-segment-block--selected" : ""}${isDragging ? " timeline-segment-block--dragging" : ""}`}
                   style={{ width: `${Math.max(widthPct, 0)}%`, cursor: isDragging ? "grabbing" : "pointer" }}
-                  title={`Segment ${segmentNumber}: ${formatTimeShort(segment.start)} - ${formatTimeShort(segment.end)}`}
-                  aria-label={`Segment ${segmentNumber}: ${formatTimeShort(segment.start)} - ${formatTimeShort(segment.end)}`}
+                  title={`${getTimelineMediaLabel(segment, t)} ${segmentNumber}: ${formatTimeShort(segment.start)} - ${formatTimeShort(segment.end)}`}
+                  aria-label={`${getTimelineMediaLabel(segment, t)} ${segmentNumber}: ${formatTimeShort(segment.start)} - ${formatTimeShort(segment.end)}`}
                   onMouseDown={handleSegmentMouseDown}
                 >
                   <span className="timeline-segment-number">{segmentNumber}</span>
+                  <span className="timeline-segment-media-icon" aria-hidden="true">{getTimelineMediaIcon(segment)}</span>
                 </div>
               </React.Fragment>
             );
@@ -336,10 +365,7 @@ export function TimelinePanel({
   ];
 
   const findAudioSourceIndex = (segment) => {
-    if (!segment.audioSource) return -1;
-    return segments.findIndex((source) => (
-      source.start === segment.audioSource.start && source.end === segment.audioSource.end && !source.audioOnly
-    ));
+    return findMatchingAudioSourceIndex(segment, segments);
   };
 
   const getFrameNumber = (segment, itemIndex) => {
@@ -349,7 +375,7 @@ export function TimelinePanel({
 
   const getTimelineIndexLabel = (segment, itemIndex) => {
     const frameNumber = getFrameNumber(segment, itemIndex);
-    return `${String(frameNumber).padStart(2, "0")}${segment.audioOnly ? "A" : "V"}`;
+    return String(frameNumber).padStart(2, "0");
   };
 
   return (
@@ -383,11 +409,12 @@ export function TimelinePanel({
 
             {/* Index label for each video/audio to indicate its order in the timeline */}
             <span
-              className={`timeline-index${segment.audioOnly ? " timeline-index--audio" : " timeline-index--video"}`}
-              aria-label={segment.audioOnly ? t("audioSegment") : t("videoSegment")}
-              title={segment.audioOnly ? t("audioSegment") : t("videoSegment")}
+              className={`timeline-index timeline-index--${getTimelineMediaType(segment)}`}
+              aria-label={`${getTimelineMediaLabel(segment, t)} ${getTimelineIndexLabel(segment, itemIndex)}`}
+              title={getTimelineMediaLabel(segment, t)}
             >
-              {getTimelineIndexLabel(segment, itemIndex)}
+              <span className="timeline-index-number">{getTimelineIndexLabel(segment, itemIndex)}</span>
+              <span className="timeline-media-icon" aria-hidden="true">{getTimelineMediaIcon(segment)}</span>
             </span>
 
 

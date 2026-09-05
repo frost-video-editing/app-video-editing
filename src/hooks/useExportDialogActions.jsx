@@ -25,6 +25,18 @@ export default function useExportDialogActions({
     messages.setStatusMessage(t("outputSet", result.filePath));
   }, [editorApi, messages, setOutputPath, sourceName]);
 
+  const handleChooseOutputFolder = useCallback(async (setOutputDirectoryPath) => {
+    if (!editorApi?.selectOutputFolder) {
+      messages.setErrorMessage(editorMessages.desktopShellRequired);
+      return;
+    }
+    const result = await editorApi.selectOutputFolder();
+    if (!result) return;
+    setOutputPath("");
+    setOutputDirectoryPath(result.filePath);
+    messages.setStatusMessage(t("outputFolderSet", result.filePath));
+  }, [editorApi, messages, t]);
+
   const handleOpenExportConfirm = useCallback(() => {
     if (!sourcePath || !segments.length) {
       messages.setErrorMessage(editorMessages.chooseVideoFirst);
@@ -38,7 +50,7 @@ export default function useExportDialogActions({
     if (!isExporting) setIsExportConfirmOpen(false);
   }, [isExporting, setIsExportConfirmOpen]);
 
-  return { handleChooseOutput, handleOpenExportConfirm, handleCloseExportConfirm };
+  return { handleChooseOutput, handleChooseOutputFolder, handleOpenExportConfirm, handleCloseExportConfirm };
 }
 
 // Subscribes to export progress events and owns their display state.
