@@ -41,6 +41,7 @@ export default function useCropPresets({
   crop,
   previewBounds,
   cropFormUnit,
+  metadata,
   setCrop,
   setIsCropPreviewLocked,
   pushUndoSnapshot,
@@ -156,7 +157,13 @@ export default function useCropPresets({
       return;
     }
     const name = (presetName || `preset-${new Date().toISOString()}`).trim();
-    setCropPresets((current) => [{ id: Date.now(), name, crop: normalizeCropInput(crop) }, ...current].slice(0, MAX_PRESETS));
+    setCropPresets((current) => [{
+      id: Date.now(),
+      name,
+      crop: normalizeCropInput(crop),
+      sourceWidth: Number(metadata?.width) || null,
+      sourceHeight: Number(metadata?.height) || null
+    }, ...current].slice(0, MAX_PRESETS));
     setPresetName("");
     messages.setStatusMessage(t("cropPresetSaved", name));
     messages.clearErrorOnly();
@@ -166,7 +173,25 @@ export default function useCropPresets({
   function handleApplyCropPreset(preset) {
     if (!preset?.crop) return;
     pushUndoSnapshot();
-    setCrop({ ...preset.crop });
+    const sourceWidth = Number(preset.sourceWidth);
+    const sourceHeight = Number(preset.sourceHeight);
+    const targetWidth = Number(metadata?.width);
+    const targetHeight = Number(metadata?.height);
+    if (sourceWidth > 0 && sourceHeight > 0 && targetWidth > 0 && targetHeight > 0) {
+      const savedCrop = normalizeCropInput(preset.crop);
+      const leftPx = (savedCrop.left / 100) * sourceWidth;
+      const topPx = (savedCrop.top / 100) * sourceHeight;
+      const rightPx = (savedCrop.right / 100) * sourceWidth;
+      const bottomPx = (savedCrop.bottom / 100) * sourceHeight;
+      setCrop(normalizeCropInput({
+        left: (leftPx / targetWidth) * 100,
+        top: (topPx / targetHeight) * 100,
+        right: (rightPx / targetWidth) * 100,
+        bottom: (bottomPx / targetHeight) * 100
+      }));
+    } else {
+      setCrop({ ...preset.crop });
+    }
     setIsCropPreviewLocked(true);
     messages.setStatusMessage(t("cropPresetApplied", preset.name));
   }
@@ -199,7 +224,12 @@ export default function useCropPresets({
       const payload = {
         format: PRESET_FILE_FORMAT,
         version: 1,
-        presets: cropPresets.map(({ name, crop }) => ({ name, crop }))
+        presets: cropPresets.map(({ name, crop, sourceWidth, sourceHeight }) => ({
+          name,
+          crop,
+          sourceWidth: sourceWidth || null,
+          sourceHeight: sourceHeight || null
+        }))
       };
 
       const contents = JSON.stringify(payload, null, 2);
@@ -257,7 +287,9 @@ export default function useCropPresets({
         .map((preset, index) => ({
           id: Date.now() + index,
           name: preset.name.trim(),
-          crop: normalizeCropInput(preset.crop)
+          crop: normalizeCropInput(preset.crop),
+          sourceWidth: Number(preset.sourceWidth) || null,
+          sourceHeight: Number(preset.sourceHeight) || null
         }));
 
       if (validPresets.length) {

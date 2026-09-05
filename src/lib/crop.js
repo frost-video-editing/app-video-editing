@@ -55,7 +55,7 @@ export function getCropBoxStyle(crop) {
 export function getCroppedPreviewVideoStyle(crop) {
   const keptWidth = Math.max(1, 100 - crop.left - crop.right);
   const keptHeight = Math.max(1, 100 - crop.top - crop.bottom);
-  const scale = 100 / Math.max(keptWidth, keptHeight);
+  const scale = 100 / Math.min(keptWidth, keptHeight);
   const offsetX = crop.left + keptWidth / 2 - 50;
   const offsetY = crop.top + keptHeight / 2 - 50;
 

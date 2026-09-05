@@ -405,6 +405,7 @@ export default function VideoEditorApp() {
     crop,
     previewBounds,
     cropFormUnit,
+    metadata,
     setCrop,
     setIsCropPreviewLocked,
     pushUndoSnapshot,
