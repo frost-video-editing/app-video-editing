@@ -82,6 +82,9 @@ export default function SettingsModal({
   useEffect(() => {
     if (!isOpen) return undefined;
 
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     const handleEscape = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -90,7 +93,10 @@ export default function SettingsModal({
     };
 
     window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener("keydown", handleEscape);
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen || !draft) return null;
@@ -189,28 +195,96 @@ export default function SettingsModal({
         </nav>
 
         <div className="settings-modal-body">
-          {/* Operation log recording settings. */}
-          {activeTab === "logs" && <section className="settings-section settings-tab-panel">
-            <h3>{t("logSettings")}</h3>
-            <p className="settings-description">{t("logSettingsDescription")}</p>
-            <div className="settings-log-options">
-              {OPERATION_TYPES.map((operationType) => (
-                <label className="settings-checkbox" key={operationType}>
-                  <input
-                    type="checkbox"
-                    checked={!draft.excludedOperationTypes.includes(operationType)}
-                    onChange={() => toggleOperationType(operationType)}
-                  />
-                  {t("recordOperation", operationLabels[operationType])}
-                </label>
-              ))}
-            </div>
+
+          {/* Video export settings. */}
+          {activeTab === "videoExport" && <section className="settings-section settings-tab-panel">
+            <h3>{t("exportSettings")}</h3>
+            <label className="settings-field">
+              {t("exportProfile")}
+              <select value={draft.exportProfile} onChange={(event) => updateDraft("exportProfile", event.target.value)}>
+                <option value="fast">{t("fast")}</option>
+                <option value="standard">{t("standard")}</option>
+                <option value="high">{t("highQuality")}</option>
+                <option value="gpu">{t("gpuFirst")}</option>
+              </select>
+            </label>
+
+            <label className="settings-checkbox">
+              <input
+                type="checkbox"
+                checked={draft.preserveCropResolution}
+                onChange={(event) => updateDraft("preserveCropResolution", event.target.checked)}
+              />
+              {t("preserveResolution")}
+            </label>
+
+            {draft.preserveCropResolution && (
+              <label className="settings-field">
+                {t("scalingAlgorithm")}
+                <select value={draft.cropScaleAlgorithm} onChange={(event) => updateDraft("cropScaleAlgorithm", event.target.value)}>
+                  <option value="lanczos">{t("highQuality")} (Lanczos)</option>
+                  <option value="bilinear">{t("fast")} (Bilinear)</option>
+                </select>
+              </label>
+            )}
+
+            <label className="settings-field">
+              {t("volumeLabel")}
+              <input
+                type="range"
+                min="0"
+                max="200"
+                step="1"
+                value={draft.audioGainPercent}
+                onChange={(event) => updateDraft("audioGainPercent", Number(event.target.value))}
+              />
+              <span>{draft.audioGainPercent}%</span>
+            </label>
+
+            <label className="settings-checkbox">
+              <input
+                type="checkbox"
+                checked={draft.audioNormalize}
+                onChange={(event) => updateDraft("audioNormalize", event.target.checked)}
+              />
+              {t("normalizeAudio")}
+            </label>
+          </section>}
+          
+            {/* Download settings. */}
+          {activeTab === "download" && (
+            <DownloadSettings
+              draft={draft}
+              updateDraft={updateDraft}
+              editorApi={editorApi}
+              onError={onError}
+              t={t}
+              outputPath={outputPath}
+              isExporting={isExporting}
+              onChooseOutput={onChooseOutput}
+            />
+          )}
+
+          {/* Source import settings. */}
+          {activeTab === "import" && <section className="settings-section settings-tab-panel">
+            <h3>{t("importSettings")}</h3>
+            <label className="settings-checkbox">
+              <input
+                type="checkbox"
+                checked={draft.backupSourceOnImport}
+                onChange={(event) => updateDraft("backupSourceOnImport", event.target.checked)}
+              />
+              {t("backupSourceOnImport")}
+            </label>
           </section>}
 
           {/* Keyboard shortcut settings. */}
           {activeTab === "shortcuts" && <section className="settings-section settings-tab-panel">
             <h3>{t("shortcut")}</h3>
+
             <p className="settings-description">{t("shortcutDescription")}</p>
+            <br />
+
             {conflicts.length > 0 && (
               <div className="conflict-warning">
                 <strong>{t("shortcutConflict")}</strong>
@@ -274,89 +348,25 @@ export default function SettingsModal({
             </button>
           </section>}
 
-
-          {activeTab === "download" && (
-            <DownloadSettings
-              draft={draft}
-              updateDraft={updateDraft}
-              editorApi={editorApi}
-              onError={onError}
-              t={t}
-              outputPath={outputPath}
-              isExporting={isExporting}
-              onChooseOutput={onChooseOutput}
-            />
-          )}
-
-          {/* Source import settings. */}
-          {activeTab === "import" && <section className="settings-section settings-tab-panel">
-            <h3>{t("importSettings")}</h3>
-            <label className="settings-checkbox">
-              <input
-                type="checkbox"
-                checked={draft.backupSourceOnImport}
-                onChange={(event) => updateDraft("backupSourceOnImport", event.target.checked)}
-              />
-              {t("backupSourceOnImport")}
-            </label>
+          {/* Operation log recording settings. */}
+          {activeTab === "logs" && <section className="settings-section settings-tab-panel">
+            <h3>{t("logSettings")}</h3>
+            
+            <p className="settings-description">{t("logSettingsDescription")}</p>
+            <div className="settings-log-options">
+              {OPERATION_TYPES.map((operationType) => (
+                <label className="settings-checkbox" key={operationType}>
+                  <input
+                    type="checkbox"
+                    checked={!draft.excludedOperationTypes.includes(operationType)}
+                    onChange={() => toggleOperationType(operationType)}
+                  />
+                  {t("recordOperation", operationLabels[operationType])}
+                </label>
+              ))}
+            </div>
           </section>}
-
-          {/* Video export settings. */}
-          {activeTab === "videoExport" && <section className="settings-section settings-tab-panel">
-            <h3>{t("exportSettings")}</h3>
-            <label className="settings-field">
-              {t("exportProfile")}
-              <select value={draft.exportProfile} onChange={(event) => updateDraft("exportProfile", event.target.value)}>
-                <option value="fast">{t("fast")}</option>
-                <option value="standard">{t("standard")}</option>
-                <option value="high">{t("highQuality")}</option>
-                <option value="gpu">{t("gpuFirst")}</option>
-              </select>
-            </label>
-
-            <label className="settings-checkbox">
-              <input
-                type="checkbox"
-                checked={draft.preserveCropResolution}
-                onChange={(event) => updateDraft("preserveCropResolution", event.target.checked)}
-              />
-              {t("preserveResolution")}
-            </label>
-
-            {draft.preserveCropResolution && (
-              <label className="settings-field">
-                {t("scalingAlgorithm")}
-                <select value={draft.cropScaleAlgorithm} onChange={(event) => updateDraft("cropScaleAlgorithm", event.target.value)}>
-                  <option value="lanczos">{t("highQuality")} (Lanczos)</option>
-                  <option value="bilinear">{t("fast")} (Bilinear)</option>
-                </select>
-              </label>
-            )}
-
-            <label className="settings-field">
-              {t("volumeLabel")}
-              <input
-                type="range"
-                min="0"
-                max="200"
-                step="1"
-                value={draft.audioGainPercent}
-                onChange={(event) => updateDraft("audioGainPercent", Number(event.target.value))}
-              />
-              <span>{draft.audioGainPercent}%</span>
-            </label>
-
-            <label className="settings-checkbox">
-              <input
-                type="checkbox"
-                checked={draft.audioNormalize}
-                onChange={(event) => updateDraft("audioNormalize", event.target.checked)}
-              />
-              {t("normalizeAudio")}
-            </label>
-          </section>}
-        </div>
-        
+        </div>        
       </div>
     </div>
   );
