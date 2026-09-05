@@ -57,11 +57,22 @@ export function createCropLog(crop, hasCrop) {
 }
 
 export function createExportLog(sourceName, outputPath, segmentCount, metadata, options = {}) {
+  const outputDurations = Array.isArray(options.outputDurations) ? options.outputDurations : [];
+  const outputDurationText = outputDurations.length
+    ? outputDurations.map((duration, index) => `#${index + 1} ${formatClockTime(duration)}`).join(" / ")
+    : "不明";
+  const totalOutputDuration = options.totalOutputDuration == null
+    ? outputDurations.reduce((total, duration) => total + (Number(duration) || 0), 0)
+    : options.totalOutputDuration;
   return createOperationLog("export", {
     "ソース": sourceName || "不明",
     "出力先": outputPath || "不明",
     "セグメント数": String(segmentCount),
-    "動画時間": `${metadata.duration.toFixed(2)}秒`,
+    "出力ファイル数": String(options.outputFileCount == null ? segmentCount : options.outputFileCount),
+    "Export時間": options.exportDurationSeconds == null ? "不明" : formatTime(options.exportDurationSeconds),
+    "各ファイル時間": outputDurationText,
+    "合計出力時間": formatClockTime(totalOutputDuration),
+    "動画時間": formatClockTime(metadata.duration),
     "解像度": `${metadata.width}x${metadata.height}`,
     "音声": metadata.hasAudio ? "あり" : "なし",
     "crop": options.crop ? formatCropDetails(options.crop) : "なし",
@@ -70,13 +81,18 @@ export function createExportLog(sourceName, outputPath, segmentCount, metadata, 
   });
 }
 
+function formatClockTime(seconds) {
+  const totalSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remainingSeconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
 export function createLoadLog(sourceName, metadata, sourcePath = "") {
   return createOperationLog("load", {
     "ファイル名": sourceName || "不明",
-    "ファイルパス": sourcePath || "不明",
-    "動画時間": `${metadata.duration.toFixed(2)}秒`,
-    "解像度": `${metadata.width}x${metadata.height}`,
-    "音声": metadata.hasAudio ? "あり" : "なし"
+    "ファイルパス": sourcePath || "不明"
   });
 }
 
