@@ -105,14 +105,12 @@ npm run dev
 
 - **Reference 1 Export Record**
 
+This video export completed in **1 minute and 25.97 seconds**.
+
+**Settings**
+
 | Item | Value |
 | --- | --- |
-| Segment count | 10 |
-| Output file count | 10 |
-| Export time | 1:25.97 |
-| Output duration by file | `#1 00:11:56 / #2 00:13:14 / #3 00:10:37 / #4 00:17:38 / #5 00:18:38 / #6 00:18:02 / #7 00:19:51 / #8 00:18:38 / #9 00:18:26 / #10 00:12:43` |
-| Total output duration | 02:39:49 |
-| Source video duration | 02:39:49 |
 | Output resolution | 1920x1080 |
 | Export profile | Standard |
 | Preserve original resolution after cropping | Enabled |
@@ -121,6 +119,18 @@ npm run dev
 | Crop | 0% on all edges |
 | Audio gain | 100% |
 | Audio normalization | Disabled |
+
+
+**Export Details**
+
+| Item | Value |
+| --- | --- |
+| Segment count | 10 |
+| Output file count | 10 |
+| Output duration by file | `#1 00:11:56 / #2 00:13:14 / #3 00:10:37 / #4 00:17:38 / #5 00:18:38 / #6 00:18:02 / #7 00:19:51 / #8 00:18:38 / #9 00:18:26 / #10 00:12:43` |
+| Total output duration | 2 hours 39 minutes and 49 seconds |
+| Source video duration | 2 hours 39 minutes and 49 seconds |
+| Export time | 1 minute and 25.97 seconds |
 
 
 ## License
