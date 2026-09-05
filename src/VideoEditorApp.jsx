@@ -30,6 +30,8 @@ import useTimelineEditingActions, {
 import useExportDialogActions, { useExportProgress } from "./hooks/useExportDialogActions.jsx";
 import useVideoExport from "./hooks/useVideoExport.jsx";
 import useLanguage from "./hooks/useLanguage.jsx";
+import { open as openExternalUrl } from "@tauri-apps/plugin-shell";
+import { isTauriRuntime } from "./tauri/editorApi.js";
 import ButtonContent from "./components/button/button-content";
 import { CropControls } from "./components/button/crop.jsx";
 import { editorMessages } from "./lib/editorMessages.js";
@@ -943,16 +945,22 @@ export default function VideoEditorApp() {
         </aside>
       </section>
 
-      If you find this app useful, please consider supporting its development. 
-      <p>Your support helps maintain and improve the app.</p>
-        <p>Support: <a
-          href="https://github.com/sponsors/KFrost-Sponsor"
-          onClick={(e) => { e.preventDefault(); openExternalUrl('https://github.com/sponsors/KFrost-Sponsor'); }}
+      <p className="support-link">
+        Support: <a
+          title="GitHub Sponsors"
+          onClick={(e) => {
+            e.preventDefault();
+            if (isTauriRuntime()) {
+              openExternalUrl("https://github.com/sponsors/KFrost-Sponsor").catch((error) => {
+                console.error("Failed to open external link", error);
+              });
+              return;
+            }
+            window.open("https://github.com/sponsors/KFrost-Sponsor", "_blank", "noopener,noreferrer");
+          }}
           rel="noopener noreferrer"
           style={{ color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}
-        >
-          GitHub Sponsors
-        </a>
+        >GitHub Sponsors</a>
       </p>
     </main>
     </>

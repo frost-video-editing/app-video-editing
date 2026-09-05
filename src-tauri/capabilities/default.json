@@ -12,6 +12,7 @@
     "core:app:default",
     "dialog:default",
     "notification:default",
+    "shell:allow-open",
     "fs:default",
     "fs:allow-read-file",
     "fs:allow-write-file",
