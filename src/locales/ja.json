@@ -11,6 +11,8 @@
   "addVideo": "動画を追加",
   "noSources": "動画ソースがありません",
   "sameFile": "同じファイルが既に読み込まれています",
+  "removeSourceWithSegmentsTitle": "ソースファイルを削除しますか？",
+  "removeSourceWithSegmentsConfirm": "このソースにはタイムライン上のセグメントがあります。ソースと関連するすべてのセグメントを削除しますか？",
   "importMoreVideosHint": "さらに動画をインポートしたい場合は、上の「動画を選択」ボタンを使用してください。",
   "notSelected": "未選択",
   "duration": "動画時間",

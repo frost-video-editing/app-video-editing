@@ -369,6 +369,10 @@ button:disabled {
   background: #02060b;
 }
 
+.preview-video--audio-only {
+  visibility: hidden;
+}
+
 .preview-crop-overlay {
   position: absolute;
   pointer-events: none;
@@ -652,6 +656,33 @@ input[type="range"] {
   font-size: 0.78rem;
 }
 
+.timeline-file-cell .timeline-file-audio-icon,
+.timeline-file-cell .timeline-file-video-icon,
+.timeline-file-cell .timeline-file-image-icon {
+  display: inline-block;
+  margin: 2px 0 0;
+  color: var(--accent-2);
+  font-size: 1rem;
+  line-height: 1;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.timeline-file-cell strong,
+.timeline-file-cell .timeline-file-audio-icon,
+.timeline-file-cell .timeline-file-video-icon,
+.timeline-file-cell .timeline-file-image-icon {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.timeline-file-cell .timeline-file-audio-icon,
+.timeline-file-cell .timeline-file-video-icon,
+.timeline-file-cell .timeline-file-image-icon {
+  margin-left: 8px;
+}
+
 .timeline-file-cell small {
   display: block;
   margin-top: 4px;
@@ -892,6 +923,10 @@ input[type="range"] {
   padding: 24px;
   display: grid;
   gap: 18px;
+}
+
+.source-remove-confirm-dialog {
+  width: min(520px, 100%);
 }
 
 .export-confirm-body {

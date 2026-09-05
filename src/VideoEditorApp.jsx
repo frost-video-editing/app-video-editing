@@ -3,6 +3,7 @@ import {
   clamp,
   segmentDuration,
   timelineDuration,
+  timelineSegmentAtTime,
   normalizeRange,
   formatVideoTime,
   splitSegmentsAtTimelinePositions
@@ -55,10 +56,12 @@ export default function VideoEditorApp() {
   const [sourceUrl, setSourceUrl] = useState("");
   const [sourceName, setSourceName] = useState("");
   const [sources, setSources] = useState([]);
+  const [pendingSourceRemoval, setPendingSourceRemoval] = useState(null);
   const sourcePathsRef = useRef(new Set());
 
   const [metadata, setMetadata] = useState({ duration: 0, width: 0, height: 0, hasAudio: false });
   const [segments, setSegments] = useState([]);
+  const previewSourceUrl = segments.length > 0 ? sourceUrl : "";
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(null);
   const [selectionStart, setSelectionStart] = useState(0);
   const [selectionEnd, setSelectionEnd] = useState(0);
@@ -110,7 +113,7 @@ export default function VideoEditorApp() {
   } = useOperationLogs();
   const previewBounds = usePreviewBounds({
     stageRef: previewStageRef,
-    sourceUrl,
+    sourceUrl: previewSourceUrl,
     width: metadata.width,
     height: metadata.height
   });
@@ -183,7 +186,7 @@ export default function VideoEditorApp() {
     handlePreviewPause
   } = usePreviewPlayback({
     videoRef: previewVideoRef,
-    sourceUrl,
+    sourceUrl: previewSourceUrl,
     duration: metadata.duration,
     segments,
     playhead,
@@ -339,27 +342,54 @@ export default function VideoEditorApp() {
   const handleSelectSource = (source) => {
     loadSource(source);
   };
-  const handleRemoveSource = (source) => {
+  const removeSource = (source) => {
+    const remainingSources = sources.filter((item) => item.filePath !== source.filePath);
     sourcePathsRef.current.delete(source.filePath);
-    setSources((current) => current.filter((item) => item.filePath !== source.filePath));
-    if (source.filePath !== sourcePath) return;
-    const remainingSource = sources.find((item) => item.filePath !== source.filePath);
-    if (remainingSource) {
-      loadSource(remainingSource);
+    setSources(remainingSources);
+    
+    setSegments((current) => current.filter((segment) => (
+      segment.sourceId !== source.id && segment.filePath !== source.filePath
+    )));
+    
+    setTimelineParts((current) => current.filter((segment) => (
+      segment.sourceId !== source.id && segment.filePath !== source.filePath
+    )));
+
+    setSelectedSegmentIndex(null);
+    if (!remainingSources.length) {
+      setSourcePath("");
+      setSourceUrl("");
+      setSourceName("");
+      setMetadata({ duration: 0, width: 0, height: 0, hasAudio: false });
+      setSegments([]);
+      setSelectionStart(0);
+      setSelectionEnd(0);
+      setPlayheadWithPreview(0);
+      setTimelineParts([]);
+      setOutputPath("");
+      setCrop(emptyCrop);
+      resetCropSelection();
       return;
     }
-    setSourcePath("");
-    setSourceUrl("");
-    setSourceName("");
-    setMetadata({ duration: 0, width: 0, height: 0, hasAudio: false });
-    setSegments([]);
-    setSelectionStart(0);
-    setSelectionEnd(0);
-    setPlayheadWithPreview(0);
-    setTimelineParts([]);
-    setOutputPath("");
-    setCrop(emptyCrop);
-    resetCropSelection();
+    if (source.filePath === sourcePath) {
+      loadSource(remainingSources[0]);
+    }
+  };
+  const handleRemoveSource = (source) => {
+    const sourceHasTimelineItems = [...segments, ...timelineParts].some((segment) => (
+      segment.sourceId === source.id || segment.filePath === source.filePath
+    ));
+    if (sourceHasTimelineItems) {
+      setPendingSourceRemoval(source);
+      return;
+    }
+    removeSource(source);
+  };
+  const handleConfirmSourceRemoval = () => {
+    if (!pendingSourceRemoval) return;
+    const source = pendingSourceRemoval;
+    setPendingSourceRemoval(null);
+    removeSource(source);
   };
   const handleAddSourceToTimeline = (source) => {
     const duration = Math.max(0.1, Number(source.info?.duration) || (source.mediaType === "image" ? 5 : 0));
@@ -443,6 +473,8 @@ export default function VideoEditorApp() {
 
     return getCroppedPreviewVideoStyle(crop);
   }, [crop, hasCrop, isCropPreviewLocked]);
+
+  const isPreviewAudioOnly = Boolean(timelineSegmentAtTime(segments, playhead)?.audioOnly);
 
   const previewViewportStyle = useMemo(() => {
     if (!isCropPreviewLocked || !hasCrop || !previewBounds) {
@@ -719,6 +751,30 @@ export default function VideoEditorApp() {
           onAdd={handleAddSourceToTimeline}
           t={t}
         />
+        {pendingSourceRemoval ? (
+          <div className="export-confirm-overlay" role="dialog" aria-modal="true" aria-label={t("removeSourceWithSegmentsTitle")}>
+            <div className="export-confirm-dialog source-remove-confirm-dialog card">
+              <div className="panel-head">
+                <div>
+                  <p className="eyebrow">Warning</p>
+                  <h2>{t("removeSourceWithSegmentsTitle")}</h2>
+                </div>
+              </div>
+              <div className="export-confirm-body">
+                <p>{t("removeSourceWithSegmentsConfirm")}</p>
+                <strong>{pendingSourceRemoval.fileName}</strong>
+              </div>
+              <div className="action-row export-confirm-actions">
+                <button type="button" className="ghost-button timeline-item-delete" onClick={handleConfirmSourceRemoval}>
+                  {t("delete")}
+                </button>
+                <button type="button" className="ghost-button" onClick={() => setPendingSourceRemoval(null)}>
+                  {t("cancel")}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="editor-grid">
@@ -734,11 +790,12 @@ export default function VideoEditorApp() {
           <CropEditor
             stageRef={previewStageRef}
             videoRef={previewVideoRef}
-            sourceUrl={sourceUrl}
+            sourceUrl={previewSourceUrl}
             isCropSelecting={isCropSelecting}
             previewBounds={previewBounds}
             previewViewportStyle={previewViewportStyle}
             previewVideoStyle={previewVideoStyle}
+            isPreviewAudioOnly={isPreviewAudioOnly}
             currentCropBoxStyle={currentCropBoxStyle}
             draftCropBoxStyle={draftCropBoxStyle}
             hasCrop={hasCrop}

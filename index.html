@@ -11,10 +11,12 @@
   </head>
   <body>
     <div id="root"></div>
+    <footer>
+      © <span id="copyright-year"></span> Frosty Editor. All rights reserved.
+    </footer>
+    <script>
+      document.getElementById("copyright-year").textContent = new Date().getFullYear();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
-
-  <footer>
-    © 2026 Frosty Editor. All rights reserved.
-  </footer>
 </html>

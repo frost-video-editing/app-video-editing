@@ -98,13 +98,12 @@ export default function useSourceLoader({
       setLoadingProgress(70);
       setLoadingMessage(t("buildingTimeline"));
       setMetadata(info);
+      
       // Loading a source prepares it for editing but does not place it on the timeline.
-      setSegments([]);
       setSelectionStart(0);
       setSelectionEnd(info.duration);
       setPlayheadWithPreview(0);
       setClipboard([]);
-      setTimelineParts([]);
       setOutputPath("");
       setCrop(emptyCrop);
       clearUndoHistory();

@@ -1,5 +1,5 @@
 [package]
-name = "video-editing"
+name = "FrostyEditor"
 version = "0.1.0"
 description = "Tauri backend for the local video editor"
 edition = "2021"

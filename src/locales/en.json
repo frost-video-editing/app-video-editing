@@ -10,6 +10,8 @@
   "addVideo": "Add video",
   "noSources": "No video sources",
   "sameFile": "This file is already loaded in the source list.",
+  "removeSourceWithSegmentsTitle": "Delete source file?",
+  "removeSourceWithSegmentsConfirm": "This source has timeline segments. Delete the source and all of its segments?",
   "importMoreVideosHint": "If you'd like to import more videos, please use the \"Choose Video\" button above.",
   "notSelected": "Not selected",
   "duration": "Duration",

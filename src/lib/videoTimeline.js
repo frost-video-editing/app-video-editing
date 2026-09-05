@@ -13,6 +13,19 @@ export function timelineDuration(segments) {
   return segments.reduce((total, segment) => total + segmentDuration(segment), 0);
 }
 
+export function timelineSegmentAtTime(segments, time) {
+  const t = Math.max(0, Number(time) || 0);
+  let cursor = 0;
+  for (const segment of Array.isArray(segments) ? segments : []) {
+    const end = cursor + segmentDuration(segment);
+    if (t >= cursor && t < end) {
+      return segment;
+    }
+    cursor = end;
+  }
+  return null;
+}
+
 // Map a time measured in composed timeline seconds to the corresponding
 // source video time. If `time` is beyond the composed duration, returns
 // the end time of the last segment. If there are no segments, returns 0.
@@ -252,7 +265,10 @@ export function splitSegmentsAtPreviewTime(segments, sourceTime, preferredTimeli
     const splitPoint = Number(segment.start) + splitOffset;
     const nextSegments = segments.flatMap((item, itemIndex) => (
       itemIndex === index
-        ? [{ start: item.start, end: splitPoint }, { start: splitPoint, end: item.end }]
+        ? [
+          { ...item, start: item.start, end: splitPoint },
+          { ...item, start: splitPoint, end: item.end }
+        ]
         : [{ ...item }]
     ));
 
@@ -289,7 +305,11 @@ export function splitSegmentsAtTimelinePositions(segments, splitTimes) {
       const boundaries = [segment.start, ...splits, segment.end];
       for (let index = 0; index < boundaries.length - 1; index += 1) {
         if (boundaries[index + 1] - boundaries[index] > 1e-9) {
-          nextSegments.push({ start: boundaries[index], end: boundaries[index + 1] });
+          nextSegments.push({
+            ...segment,
+            start: boundaries[index],
+            end: boundaries[index + 1]
+          });
         }
       }
     }

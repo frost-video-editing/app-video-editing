@@ -22,9 +22,10 @@ function getSegmentNumber(segment) {
 
 function formatTimeShort(seconds) {
   const total = Math.max(0, Number(seconds) || 0);
+  const hours = Math.floor(total / 3600);
   const minutes = Math.floor(total / 60);
   const secs = Math.floor(total % 60);
-  return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  return `${String(hours).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
 function parseTimeInput(value) {
@@ -64,6 +65,20 @@ function findMatchingAudioSourceIndex(segment, segments) {
 function getTimelineDisplayNumber(segment, segments, fallbackNumber) {
   const sourceIndex = findMatchingAudioSourceIndex(segment, segments);
   return sourceIndex >= 0 ? sourceIndex + 1 : fallbackNumber;
+}
+
+function getTimelineFileNumber(segment, segments, fallbackNumber) {
+  if (segment.sourceId) {
+    const sourceOrder = [];
+    segments.forEach((item) => {
+      if (item.sourceId && !sourceOrder.includes(item.sourceId)) {
+        sourceOrder.push(item.sourceId);
+      }
+    });
+    const sourceIndex = sourceOrder.indexOf(segment.sourceId);
+    if (sourceIndex >= 0) return sourceIndex + 1;
+  }
+  return getTimelineDisplayNumber(segment, segments, fallbackNumber);
 }
 
 function TimelineVisualizer({
@@ -244,7 +259,7 @@ function TimelineVisualizer({
             items.elements.push(
               <React.Fragment key={`segment-${index}-${segment.start}-${segment.end}`}>
                 <div
-                  className={`timeline-segment-block timeline-segment-block--${getTimelineMediaType(segment)}${isSelected ? " timeline-segment-block--selected" : ""}${isDragging ? " timeline-segment-block--dragging" : ""}`}
+                  className={`timeline-segment-block timeline-segment-block--${getTimelineMediaType(segment)}${segment.audioOnly ? " timeline-segment-block--audio-only" : ""}${isSelected ? " timeline-segment-block--selected" : ""}${isDragging ? " timeline-segment-block--dragging" : ""}`}
                   style={{ width: `${Math.max(widthPct, 0)}%`, cursor: isDragging ? "grabbing" : "pointer" }}
                   title={`${getTimelineMediaLabel(segment, t)} ${segmentNumber}: ${formatTimeShort(segment.start)} - ${formatTimeShort(segment.end)}`}
                   aria-label={`${getTimelineMediaLabel(segment, t)} ${segmentNumber}: ${formatTimeShort(segment.start)} - ${formatTimeShort(segment.end)}`}
@@ -369,13 +384,7 @@ export function TimelinePanel({
   };
 
   const getFrameNumber = (segment, itemIndex) => {
-    const sourceIndex = segment.audioOnly ? findAudioSourceIndex(segment) : -1;
-    return sourceIndex >= 0 ? sourceIndex + 1 : itemIndex + 1;
-  };
-
-  const getTimelineIndexLabel = (segment, itemIndex) => {
-    const frameNumber = getFrameNumber(segment, itemIndex);
-    return String(frameNumber).padStart(2, "0");
+    return getTimelineFileNumber(segment, segments, itemIndex + 1);
   };
 
   return (
@@ -415,10 +424,21 @@ export function TimelinePanel({
                 onDrop={(event) => handleDrop(event, active ? index : segments.length)}
               >
 
-                <td>{getTimelineIndexLabel(segment, itemIndex)}</td>
+                <td>{String(itemIndex + 1).padStart(2, "0")}</td>
                 
                 <td className="timeline-file-cell">
-                  <strong>{itemIndex + 1}</strong>
+                  <strong>{getFrameNumber(segment, itemIndex)}</strong>
+                  {getTimelineMediaType(segment) === "video" ? (
+                    <span className="timeline-file-video-icon" aria-label={t("videoSegment")} title={t("videoSegment")}>▶</span>
+                  ) : null}
+
+                  {getTimelineMediaType(segment) === "audio" ? (
+                    <span className="timeline-file-audio-icon" aria-label={t("audioSegment")} title={t("audioSegment")}>♫</span>
+                  ) : null}
+
+                  {getTimelineMediaType(segment) === "image" ? (
+                    <span className="timeline-file-image-icon" aria-label={t("imageSegment")} title={t("imageSegment")}>🖼️</span>
+                  ) : null}
                 </td>
 
                 <td className="timeline-table-actions">

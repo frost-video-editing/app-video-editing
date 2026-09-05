@@ -45,13 +45,17 @@ async function bootstrap() {
     console.error("Failed to initialise the Tauri editor bridge.", error);
   }
 
-  createRoot(document.getElementById("root")).render(
-    <React.StrictMode>
-      <AppErrorBoundary>
-        <VideoEditorApp />
-      </AppErrorBoundary>
-    </React.StrictMode>
-  );
+  try {
+    createRoot(document.getElementById("root")).render(
+      <React.StrictMode>
+        <AppErrorBoundary>
+          <VideoEditorApp />
+        </AppErrorBoundary>
+      </React.StrictMode>
+    );
+  } catch (error) {
+    console.error("Failed to render the React application.", error);
+  }
 }
 
 bootstrap();
