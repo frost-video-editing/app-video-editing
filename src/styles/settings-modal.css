@@ -127,6 +127,45 @@
   font-size: 13px;
 }
 
+.settings-table-wrapper {
+  overflow-x: auto;
+  margin-top: 18px;
+}
+
+.settings-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--text);
+}
+
+.settings-table th,
+.settings-table td {
+  padding: 12px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-table thead {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.settings-table input {
+  width: 100%;
+  min-width: 240px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  color: var(--text);
+  background: var(--bg-1);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+}
+
+.settings-table td:last-child button {
+  width: 170px;
+  box-sizing: border-box;
+}
+
 .settings-log-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

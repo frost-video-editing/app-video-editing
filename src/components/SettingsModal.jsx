@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import useLanguage from "../hooks/useLanguage.jsx";
 import { OPERATION_TYPES } from "../hooks/useOperationLogs.jsx";
+import DownloadSettings from "./DownloadSettings.jsx";
 import {
   detectKeyConflicts,
   getAllShortcutNames,
@@ -26,6 +27,13 @@ export default function SettingsModal({
   setCropScaleAlgorithm,
   exportProfile,
   setExportProfile,
+  editorApi,
+  onError,
+  cropPresetsExportPath,
+  setCropPresetsExportPath,
+  outputPath,
+  onChooseOutput,
+  isExporting,
   audioGainPercent,
   setAudioGainPercent,
   audioNormalize,
@@ -56,6 +64,7 @@ export default function SettingsModal({
       backupSourceOnImport,
       cropScaleAlgorithm,
       exportProfile,
+      cropPresetsExportPath,
       audioGainPercent,
       audioNormalize,
       excludedOperationTypes: [...excludedOperationTypes]
@@ -102,7 +111,7 @@ export default function SettingsModal({
   const handleKeyDown = (event, shortcutName) => {
     event.preventDefault();
     if (!isValidKeyPress(event)) {
-      setSaveMessage(t("modifierOnly"));
+      onError(t("modifierOnly"));
       return;
     }
 
@@ -133,12 +142,12 @@ export default function SettingsModal({
 
   const handleSave = () => {
     if (conflicts.length > 0) {
-      setSaveMessage(t("resolveShortcutConflicts"));
+      onError(t("resolveShortcutConflicts"));
       return;
     }
 
     if (!saveShortcuts(shortcuts)) {
-      setSaveMessage(t("shortcutSaveFailed"));
+      onError(t("shortcutSaveFailed"));
       return;
     }
 
@@ -147,6 +156,8 @@ export default function SettingsModal({
     window.localStorage.setItem("videoEditor.backupSourceOnImport", String(draft.backupSourceOnImport));
     setCropScaleAlgorithm(draft.cropScaleAlgorithm);
     setExportProfile(draft.exportProfile);
+    setCropPresetsExportPath(draft.cropPresetsExportPath);
+    window.localStorage.setItem("videoEditor.cropPresetsExportPath", draft.cropPresetsExportPath);
     setAudioGainPercent(draft.audioGainPercent);
     setAudioNormalize(draft.audioNormalize);
     setExcludedOperationTypes(draft.excludedOperationTypes);
@@ -170,15 +181,14 @@ export default function SettingsModal({
         </header>
 
         <nav className="settings-tabs" aria-label={t("settingsCategory")}>
-          <button type="button" className={activeTab === "logs" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("logs")}>{t("logSettings")}</button>
-          <button type="button" className={activeTab === "shortcuts" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("shortcuts")}>{t("shortcut")}</button>
+          <button type="button" className={activeTab === "videoExport" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("videoExport")}>{t("exportSettings")}</button>
+          <button type="button" className={activeTab === "download" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("download")}>{t("downloadSettings")}</button>
           <button type="button" className={activeTab === "import" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("import")}>{t("importSettings")}</button>
-          <button type="button" className={activeTab === "export" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("export")}>{t("exportSettings")}</button>
+          <button type="button" className={activeTab === "shortcuts" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("shortcuts")}>{t("shortcut")}</button>
+          <button type="button" className={activeTab === "logs" ? "settings-tab settings-tab--active" : "settings-tab"} onClick={() => setActiveTab("logs")}>{t("logSettings")}</button>
         </nav>
 
         <div className="settings-modal-body">
-          {saveMessage && <div className={`message ${conflicts.length ? "error" : "success"}`}>{saveMessage}</div>}
-
           {/* Operation log recording settings. */}
           {activeTab === "logs" && <section className="settings-section settings-tab-panel">
             <h3>{t("logSettings")}</h3>
@@ -264,6 +274,20 @@ export default function SettingsModal({
             </button>
           </section>}
 
+
+          {activeTab === "download" && (
+            <DownloadSettings
+              draft={draft}
+              updateDraft={updateDraft}
+              editorApi={editorApi}
+              onError={onError}
+              t={t}
+              outputPath={outputPath}
+              isExporting={isExporting}
+              onChooseOutput={onChooseOutput}
+            />
+          )}
+
           {/* Source import settings. */}
           {activeTab === "import" && <section className="settings-section settings-tab-panel">
             <h3>{t("importSettings")}</h3>
@@ -278,7 +302,7 @@ export default function SettingsModal({
           </section>}
 
           {/* Video export settings. */}
-          {activeTab === "export" && <section className="settings-section settings-tab-panel">
+          {activeTab === "videoExport" && <section className="settings-section settings-tab-panel">
             <h3>{t("exportSettings")}</h3>
             <label className="settings-field">
               {t("exportProfile")}

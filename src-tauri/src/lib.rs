@@ -69,6 +69,13 @@ struct SelectOutputArgs {
     suggested_name: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct WritePresetFileArgs {
+    #[serde(alias = "filePath")]
+    file_path: String,
+    contents: String,
+}
+
 // ---------------------------------------------------------------------------
 // Binary resolution
 // ---------------------------------------------------------------------------
@@ -262,6 +269,47 @@ async fn select_output(
     Ok(Some(FilePathResponse {
         file_path: path.to_string_lossy().to_string(),
     }))
+}
+
+#[tauri::command]
+async fn select_preset_output(
+    app: AppHandle,
+) -> Result<Option<FilePathResponse>, String> {
+    let downloads = app
+        .path()
+        .download_dir()
+        .unwrap_or_else(|_| PathBuf::from("."));
+
+    let app_for_dialog = app.clone();
+    let picked = tokio::task::spawn_blocking(move || {
+        app_for_dialog
+            .dialog()
+            .file()
+            .set_title("クロッププリセットの保存先を選択")
+            .set_directory(&downloads)
+            .blocking_pick_folder()
+    })
+    .await
+    .map_err(|e| format!("dialog task failed: {e}"))?;
+
+    let Some(picked) = picked else {
+        return Ok(None);
+    };
+    let path = filepath_to_pathbuf(picked).ok_or("Unsupported file path scheme")?;
+    Ok(Some(FilePathResponse {
+        file_path: path.to_string_lossy().to_string(),
+    }))
+}
+
+#[tauri::command]
+async fn write_preset_file(payload: WritePresetFileArgs) -> Result<FilePathResponse, String> {
+    let path = PathBuf::from(&payload.file_path);
+    tokio::fs::write(&path, payload.contents)
+        .await
+        .map_err(|e| format!("プリセットの保存に失敗しました: {e}"))?;
+    Ok(FilePathResponse {
+        file_path: path.to_string_lossy().to_string(),
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -541,6 +589,8 @@ pub fn run() {
             backup_source,
             probe_video,
             select_output,
+            select_preset_output,
+            write_preset_file,
             export_video,
             cancel_export,
         ])

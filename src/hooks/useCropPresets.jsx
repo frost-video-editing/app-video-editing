@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { clamp } from "../lib/videoTimeline.js";
 import { normalizeCropInput } from "../lib/crop.js";
 import {
@@ -12,6 +12,16 @@ import useLanguage from "./useLanguage.jsx";
 const STORAGE_KEY = "videoEditor.cropPresets";
 const PRESET_FILE_FORMAT = "video-editor-crop-presets";
 const MAX_PRESETS = 50;
+
+function joinPresetPath(folderPath, fileName) {
+  const separator = folderPath.includes("\\") ? "\\" : "/";
+  return `${folderPath.replace(/[\\/]$/, "")}${separator}${fileName}`;
+}
+
+function createPresetFileName() {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return `video-editor-crop-presets_${timestamp}.json`;
+}
 
 function restoreCropPresets() {
   if (typeof window === "undefined") return [];
@@ -36,6 +46,8 @@ export default function useCropPresets({
   pushUndoSnapshot,
   messages,
   showToast,
+  editorApi,
+  cropPresetsExportPath,
   hasCrop,
   presetName,
   setPresetName
@@ -44,6 +56,7 @@ export default function useCropPresets({
   const [cropForm, setCropForm] = useState({ left: 0, top: 0, width: 100, height: 100 });
   const [cropPresets, setCropPresets] = useState(restoreCropPresets);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const isExportingPresetsRef = useRef(false);
 
   useEffect(() => {
     if (!pendingDelete) return undefined;
@@ -172,12 +185,16 @@ export default function useCropPresets({
 
 
   // Export crop presets to a JSON file
-  function handleExportCropPresets() {
+  async function handleExportCropPresets() {
+    if (isExportingPresetsRef.current) return;
     if (!cropPresets.length) {
       showToast(t("cropPresetsExportEmpty"));
       return;
     }
 
+    isExportingPresetsRef.current = true;
+    messages.clearErrorOnly();
+    messages.clearStatusOnly();
     try {
       const payload = {
         format: PRESET_FILE_FORMAT,
@@ -185,26 +202,40 @@ export default function useCropPresets({
         presets: cropPresets.map(({ name, crop }) => ({ name, crop }))
       };
 
-      // download the presets JSON file
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `video-editor-crop-presets_${new Date().toISOString()}.json`;
-      link.click();
-      URL.revokeObjectURL(url);
+      const contents = JSON.stringify(payload, null, 2);
+      let savedPath;
+      if (editorApi?.writePresetFile && cropPresetsExportPath) {
+        const fileName = createPresetFileName();
+        const filePath = joinPresetPath(cropPresetsExportPath, fileName);
+        const result = await editorApi.writePresetFile({ filePath, contents });
+        savedPath = result?.filePath || filePath;
+      } else {
+        const fileName = createPresetFileName();
+        const blob = new Blob([contents], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        link.click();
+        URL.revokeObjectURL(url);
+        savedPath = fileName;
+      }
 
       // download message
-      messages.setStatusMessage(t("cropPresetsExported"));
-      showToast(t("cropPresetsExported"));
+      messages.setStatusMessage(t("cropPresetsExported", savedPath));
+      showToast(t("cropPresetsExported", savedPath));
 
     } catch (error) {
       console.error("Failed to export crop presets", error);
+      messages.clearStatusOnly();
       messages.setErrorMessage(t("cropPresetsExportFailed"));
       showToast(t("cropPresetsExportFailed"));
+    } finally {
+      isExportingPresetsRef.current = false;
     }
   }
 
+  // Import crop presets from a JSON file
   async function handleImportCropPresets(file) {
     if (!file) return;
 

@@ -63,6 +63,7 @@ export default function VideoEditorApp() {
   const [clipBank, setClipBank] = useState([]); // saved clip buttons
   const [timelineParts, setTimelineParts] = useState([]);
   const [timelineToast, setTimelineToast] = useState("");
+  const [timelineToastKind, setTimelineToastKind] = useState("success");
   const timelineToastTimerRef = useRef(null);
   const [selectedClipIndex, setSelectedClipIndex] = useState(null);
   const [cutMarkers, setCutMarkers] = useState([]); // array of { start, end }
@@ -76,6 +77,10 @@ export default function VideoEditorApp() {
   });
   const [cropScaleAlgorithm, setCropScaleAlgorithm] = useState("lanczos");
   const [exportProfile, setExportProfile] = useState("standard");
+  const [cropPresetsExportPath, setCropPresetsExportPath] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem("videoEditor.cropPresetsExportPath") || "";
+  });
 
   const [isExporting, setIsExporting] = useState(false);
   const [isCropPreviewLocked, setIsCropPreviewLocked] = useState(false);
@@ -110,14 +115,18 @@ export default function VideoEditorApp() {
   const clipboardDuration = useMemo(() => timelineDuration(clipboard), [clipboard]);
   const messages = useEditorMessages(editorMessages.initialStatus);
   const { language, setLanguage, t } = useLanguage();
-  const showTimelineToast = (message) => {
+  const showTimelineToast = (message, kind = "success") => {
     if (timelineToastTimerRef.current) clearTimeout(timelineToastTimerRef.current);
+    setTimelineToastKind(kind);
     setTimelineToast(message);
     timelineToastTimerRef.current = setTimeout(() => {
       setTimelineToast("");
       timelineToastTimerRef.current = null;
     }, 2500);
   };
+  useEffect(() => {
+    if (messages.errorText) showTimelineToast(messages.errorText, "error");
+  }, [messages.errorText]);
   const hasCrop = crop.left > 0 || crop.top > 0 || crop.right > 0 || crop.bottom > 0;
   const addOperationLog = useOperationLogger({
     selectedDuration,
@@ -335,6 +344,8 @@ export default function VideoEditorApp() {
     pushUndoSnapshot,
     messages,
     showToast: showTimelineToast,
+    editorApi,
+    cropPresetsExportPath,
     hasCrop,
     presetName,
     setPresetName
@@ -548,7 +559,7 @@ export default function VideoEditorApp() {
         indeterminate={loadingIndeterminate}
         startTime={loadStartTimeRef.current}
       />
-      {timelineToast ? <div className="timeline-toast" role="status">{timelineToast}</div> : null}
+      {timelineToast ? <div className={`timeline-toast timeline-toast--${timelineToastKind}`} role="status">{timelineToast}</div> : null}
       <SettingsModal
         t={t}
         isOpen={isSettingsOpen}
@@ -561,6 +572,13 @@ export default function VideoEditorApp() {
         setCropScaleAlgorithm={setCropScaleAlgorithm}
         exportProfile={exportProfile}
         setExportProfile={setExportProfile}
+        editorApi={editorApi}
+        onError={(message) => showTimelineToast(message, "error")}
+        cropPresetsExportPath={cropPresetsExportPath}
+        setCropPresetsExportPath={setCropPresetsExportPath}
+        outputPath={outputPath}
+        onChooseOutput={handleChooseOutput}
+        isExporting={isExporting}
         audioGainPercent={audioGainPercent}
         setAudioGainPercent={setAudioGainPercent}
         audioNormalize={audioNormalize}
@@ -853,7 +871,6 @@ export default function VideoEditorApp() {
               </button>
             </div>
 
-            {messages.errorText ? <p className="error-message">{messages.errorText}</p> : null}
           </section>
         </aside>
       </section>

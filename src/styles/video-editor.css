@@ -641,7 +641,7 @@ input[type="range"] {
   position: fixed;
   right: 24px;
   bottom: 24px;
-  z-index: 20;
+  z-index: 1200;
   max-width: min(360px, calc(100vw - 48px));
   padding: 12px 16px;
   border: 1px solid var(--accent);
@@ -649,6 +649,11 @@ input[type="range"] {
   background: var(--panel, #14202c);
   color: var(--text, #fff);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.timeline-toast--error {
+  border-color: #ff8b8b;
+  color: #ffd0d0;
 }
 
 .clip-bank-panel {
