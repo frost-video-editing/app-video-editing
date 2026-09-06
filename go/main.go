@@ -16,9 +16,11 @@ import (
 )
 
 type Segment struct {
-	Start     float64 `json:"start"`
-	End       float64 `json:"end"`
-	AudioOnly bool    `json:"audioOnly"`
+	Start      float64 `json:"start"`
+	End        float64 `json:"end"`
+	AudioOnly  bool    `json:"audioOnly"`
+	SourcePath string  `json:"sourcePath"`
+	MediaType  string  `json:"mediaType"`
 }
 
 type Request struct {
@@ -150,13 +152,27 @@ func parseProgressTime(line string) (float64, bool) {
 	return value, math.IsNaN(value) == false && math.IsInf(value, 0) == false && value >= 0
 }
 
+func segmentInputPath(request Request, segment Segment) string {
+	if segment.SourcePath != "" {
+		return segment.SourcePath
+	}
+	return request.SourcePath
+}
+
+func segmentInputArgs(request Request, segment Segment) []string {
+	args := []string{}
+	if segment.MediaType == "image" {
+		args = append(args, "-loop", "1")
+	} else if segment.Start > 0 {
+		args = append(args, "-ss", formatNumber(segment.Start))
+	}
+	return append(args, "-t", formatNumber(segment.End-segment.Start), "-i", segmentInputPath(request, segment))
+}
+
 func exportSegment(request Request, ffmpeg, encoder string, index int, segment Segment, output string, filter string, adjustAudio bool, threads int, progress []float64, progressMu *sync.Mutex, totalDuration float64) error {
 	duration := segment.End - segment.Start
 	args := []string{"-y", "-progress", "pipe:1", "-stats_period", "0.25", "-nostats"}
-	if segment.Start > 0 {
-		args = append(args, "-ss", formatNumber(segment.Start))
-	}
-	args = append(args, "-t", formatNumber(duration), "-i", request.SourcePath)
+	args = append(args, segmentInputArgs(request, segment)...)
 	if request.AudioOnly || segment.AudioOnly {
 		args = append(args, "-vn")
 		if adjustAudio {

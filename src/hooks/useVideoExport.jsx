@@ -78,7 +78,11 @@ export default function useVideoExport({
       const result = await editorApi.exportVideo({
         sourcePath,
         outputPath: chosenOutput,
-        segments: safeSegments,
+        segments: safeSegments.map((segment) => ({
+          ...segment,
+          sourcePath: segment.filePath || sourcePath,
+          mediaType: segment.mediaType || "video"
+        })),
         crop: normalizedCrop,
         preserveCropResolution,
         cropScaleAlgorithm,

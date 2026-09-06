@@ -15,6 +15,7 @@ export default function useSourceLoader({
   editorApi,
   setSourcePath,
   setSourceUrl,
+  setSourceMediaType,
   setSourceName,
   registerSource,
   setMetadata,
@@ -33,7 +34,7 @@ export default function useSourceLoader({
   messages
 }) {
   const { t } = useLanguage();
-  const loadSource = useCallback(async (result) => {
+  const loadSource = useCallback(async (result, { skipRegister = false } = {}) => {
     if (!result?.filePath) {
       messages.setErrorMessage(editorMessages.videoNotFound);
       messages.setStatusMessage(editorMessages.loadFailed);
@@ -53,28 +54,32 @@ export default function useSourceLoader({
       const info = result.info || (await editorApi.probeVideo(result.filePath));
 
       const nextSourceName = result.fileName || result.filePath.split(/[\\/]/).pop() || "video";
-      const wasRegistered = registerSource?.({
-        filePath: result.filePath,
-        fileUrl: result.fileUrl,
-        fileName: nextSourceName,
-        info,
-        mediaType
-      });
-      if (wasRegistered === false) {
-        return;
-      }
-      if (mediaType !== "video") {
-        return;
+      if (!skipRegister) {
+        const wasRegistered = registerSource?.({
+          filePath: result.filePath,
+          fileUrl: result.fileUrl,
+          fileName: nextSourceName,
+          info,
+          mediaType
+        });
+        if (wasRegistered === false) {
+          return;
+        }
       }
       setSourcePath(result.filePath);
       setSourceUrl(result.fileUrl);
+      setSourceMediaType(mediaType);
       setSourceName(nextSourceName);
 
-      setMetadata(info);
+      const sourceDuration = mediaType === "image" ? 5 : info.duration;
+      setMetadata({
+        ...info,
+        duration: sourceDuration
+      });
       
       // Loading a source prepares it for editing but does not place it on the timeline.
       setSelectionStart(0);
-      setSelectionEnd(info.duration);
+      setSelectionEnd(sourceDuration);
       setPlayheadWithPreview(0);
       setClipboard([]);
       setOutputPath("");
@@ -90,7 +95,7 @@ export default function useSourceLoader({
       messages.setErrorMessage(error?.message || editorMessages.videoLoadingFailed);
       messages.setStatusMessage(editorMessages.loadFailed);
     }
-  }, [clearUndoHistory, editorApi, emptyCrop, isOperationTypeEnabled, messages, registerSource, resetCropSelection, setClipboard, setCrop, setMetadata, setOperationLogs, setOutputPath, setPlayheadWithPreview, setSelectionEnd, setSelectionStart, setSourceName, setSourcePath, setSourceUrl, t]);
+  }, [clearUndoHistory, editorApi, emptyCrop, isOperationTypeEnabled, messages, registerSource, resetCropSelection, setClipboard, setCrop, setMetadata, setOperationLogs, setOutputPath, setPlayheadWithPreview, setSelectionEnd, setSelectionStart, setSourceMediaType, setSourceName, setSourcePath, setSourceUrl, t]);
 
   const handleChooseSource = useCallback(async () => {
     if (!editorApi) {
@@ -105,7 +110,7 @@ export default function useSourceLoader({
         return;
       }
 
-      let activeVideoLoaded = false;
+      let activeSourceLoaded = false;
       for (const result of results) {
         const mediaType = getMediaType(result.fileName || result.filePath);
         if (editorApi.backupSource && backupSourceOnImport) {
@@ -118,9 +123,9 @@ export default function useSourceLoader({
           }
         }
 
-        if (mediaType === "video" && !activeVideoLoaded) {
+        if (!activeSourceLoaded) {
           await loadSource({ ...result, mediaType });
-          activeVideoLoaded = true;
+          activeSourceLoaded = true;
           continue;
         }
 
