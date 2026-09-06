@@ -15,9 +15,11 @@ export default function SourceTable({ sources, activeSourcePath, onSelect, onRem
     <section className="source-panel card" aria-labelledby="source-list-title">
       <div className="source-panel-head">
         <div>
+          <p className="source-panel-eyebrow">MEDIA LIBRARY</p>
           <h2 id="source-list-title">{t("sourceList")}</h2>
-
-          <h4>{t("importMoreVideosHint")}</h4>
+          <div className="source-panel-hints">
+            <p>{t("importHint")}</p>
+          </div>
         </div>
       </div>
       <div className="source-table-wrapper">
@@ -34,7 +36,11 @@ export default function SourceTable({ sources, activeSourcePath, onSelect, onRem
           <tbody>
             {sources.length === 0 ? (
               <tr>
-                <td className="source-table-empty" colSpan="5">{t("noSources")}</td>
+                <td className="source-table-empty" colSpan="5">
+                  <span className="source-empty-icon" aria-hidden="true">◌</span>
+                  <strong>{t("noSources")}</strong>
+                  <span>{t("importHint")}</span>
+                </td>
               </tr>
             ) : sources.map((source, index) => (
               <tr key={source.id} className={source.filePath === activeSourcePath ? "source-row--active" : ""}>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { logError } from "../lib/logger.js";
 import { editorMessages } from "../lib/editorMessages.js";
-import { clamp, sourceToTimelineTime, timelineDuration, timelineToSourceTime } from "../lib/videoTimeline.js";
+import { clamp, timelineDuration, timelineToSourceTime } from "../lib/videoTimeline.js";
 import useLanguage from "./useLanguage.jsx";
 
 // Tracks the displayed video rectangle inside the preview stage.
@@ -63,6 +63,26 @@ export function usePlayheadPreview({ videoRef, totalDuration, segments, setPlayh
       video.currentTime = sourceTime;
     }
   }, [segments, setPlayhead, totalDuration, videoRef]);
+}
+
+function sourceTimeAtCurrentTimelinePosition(segments, sourceTime, preferredTimelineTime) {
+  let cursor = 0;
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    const duration = Math.max(0, Number(segment.end) - Number(segment.start));
+    const end = cursor + duration;
+    const isLastSegment = index === segments.length - 1;
+    if (preferredTimelineTime >= cursor && (preferredTimelineTime < end || (isLastSegment && preferredTimelineTime <= end))) {
+      const segmentStart = Number(segment.start) || 0;
+      const segmentEnd = Number(segment.end) || segmentStart;
+      if (sourceTime >= segmentStart - 0.15 && sourceTime <= segmentEnd + 0.15) {
+        return clamp(cursor + sourceTime - segmentStart, cursor, end);
+      }
+      return null;
+    }
+    cursor = end;
+  }
+  return null;
 }
 
 // Owns the preview video's playback, loading feedback, and Web Audio graph.
@@ -157,9 +177,11 @@ export function usePreviewPlayback({
   function handlePreviewTimeUpdate(event) {
     const currentTime = Number(event.currentTarget.currentTime) || 0;
     setPreviewCurrentTime(currentTime);
-    const timelineTime = sourceToTimelineTime(segments, currentTime, playhead);
-    if (timelineTime !== null) {
-      onPlayheadChange((current) => Math.abs(current - timelineTime) > 0.15 ? timelineTime : current);
+    if (!isPreviewPlaying) return;
+
+    const timelineTime = sourceTimeAtCurrentTimelinePosition(segments, currentTime, Number(playhead));
+    if (timelineTime !== null && Math.abs(Number(playhead) - timelineTime) > 0.15) {
+      onPlayheadChange(timelineTime);
     }
   }
 

@@ -226,7 +226,30 @@ button:disabled {
   gap: 10px;
 }
 
+.editor-toolbar {
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.editor-toolbar > button {
+  min-height: 54px;
+  white-space: nowrap;
+}
+
+.editor-toolbar > button:nth-of-type(1) {
+  width: 162px;
+}
+
+.editor-toolbar > button:nth-of-type(2) {
+  width: 152px;
+}
+
+.editor-toolbar > button:nth-of-type(3) {
+  width: 220px;
+}
+
 .language-switcher {
+  flex: 0 0 100px;
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -237,7 +260,8 @@ button:disabled {
 }
 
 .language-button {
-  min-width: 38px;
+  flex: 1 1 0;
+  min-width: 0;
   padding: 6px 9px;
   border: 0;
   border-radius: 999px;
@@ -246,6 +270,13 @@ button:disabled {
   font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .editor-toolbar {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
 }
 
 .language-button:hover,

@@ -82,6 +82,7 @@ function getTimelineFileNumber(segment, segments, fallbackNumber) {
 }
 
 function TimelineVisualizer({
+  t: translate,
   playhead = 0,
   selectionStart = 0,
   selectionEnd = 0,
@@ -93,7 +94,8 @@ function TimelineVisualizer({
   onSegmentClick = () => {},
   onSegmentDrop = () => {}
 }) {
-  const { t } = useLanguage();
+  const { t: localTranslate } = useLanguage();
+  const t = translate || localTranslate;
   const containerRef = useRef(null);
   const [draggingMode, setDraggingMode] = useState(null); // null | playhead | start | end | timeline | segment drag
   const [containerWidth, setContainerWidth] = useState(0);
@@ -278,7 +280,7 @@ function TimelineVisualizer({
         <div
           className="timeline-scrubber"
           style={{ left: `${(playheadPx / containerWidth) * 100}%` }}
-          title={`Current: ${formatTimeShort(playhead)}`}
+          title={`${t("currentTimeline")}: ${formatTimeShort(playhead)}`}
         />
       </div>
 
@@ -301,6 +303,7 @@ function TimelineVisualizer({
 }
 
 function TimelineEditor({
+  t: translate,
   playhead,
   selectionStart,
   selectionEnd,
@@ -315,12 +318,12 @@ function TimelineEditor({
   onMoveSegment,
   onSegmentDrop
 }) {
-  const { t } = useLanguage();
   const selectedSegment = selectedSegmentIndex === null ? null : segments[selectedSegmentIndex];
 
   return (
     <>
       <TimelineVisualizer
+        t={translate}
         playhead={playhead}
         selectionStart={selectionStart}
         selectionEnd={selectionEnd}
@@ -338,6 +341,7 @@ function TimelineEditor({
 }
 
 export function TimelinePanel({
+  t: translate,
   segments,
   clipBank = [],
   timelineParts = [],
@@ -351,7 +355,8 @@ export function TimelinePanel({
   onSelectSegment,
   onExtractSegmentAudio
 }) {
-  const { t } = useLanguage();
+  const { t: localTranslate } = useLanguage();
+  const t = translate || localTranslate;
   const [draggedIndex, setDraggedIndex] = useState(null);
   resetSegmentNumbersIfNewTimeline(segments);
 

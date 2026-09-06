@@ -8,14 +8,46 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  padding: 2px 2px 16px;
+  border-bottom: 1px solid var(--line);
 }
 
 .source-panel-head h2 {
   margin: 0;
 }
 
-.source-panel-head .eyebrow {
-  margin-bottom: 4px;
+.source-panel-eyebrow {
+  margin: 0 0 5px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.source-panel-hints {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+}
+
+.source-panel-hints p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.source-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 42px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--accent);
+  background: rgba(82, 204, 241, 0.08);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .source-table-wrapper {
@@ -41,6 +73,21 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
+.source-table th {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.source-table tbody tr {
+  transition: background-color 0.18s ease;
+}
+
+.source-table tbody tr:not(:last-child):hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
 .source-row--active {
   background: rgba(82, 204, 241, 0.12);
 }
@@ -63,9 +110,31 @@
 }
 
 .source-table-empty {
-  padding: 18px 12px;
+  display: table-cell;
+  padding: 34px 12px 38px !important;
   color: var(--muted);
   text-align: center !important;
+}
+
+.source-table-empty > * {
+  display: block;
+}
+
+.source-empty-icon {
+  margin-bottom: 8px;
+  color: var(--accent);
+  font-size: 28px;
+  line-height: 1;
+}
+
+.source-table-empty strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.source-table-empty span:last-child {
+  margin-top: 6px;
+  font-size: 12px;
 }
 
 .source-remove-button {
@@ -76,6 +145,11 @@
   .source-panel-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .source-count {
+    align-self: flex-end;
+    margin-top: -48px;
   }
 
   .source-name-button {
