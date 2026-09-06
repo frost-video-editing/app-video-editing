@@ -70,6 +70,7 @@
 /* Main Table */
 .log-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 14px;
 }
@@ -87,21 +88,25 @@
 }
 
 .log-table .col-number {
-  width: 50px;
+  width: 5%;
   text-align: center;
 }
 
 .log-table .col-operation {
-  width: 150px;
+  width: 15%;
 }
 
 .log-table .col-timestamp {
-  width: 200px;
+  width: 25%;
 }
 
 .log-table .col-details {
-  width: 50px;
-  text-align: center;
+  width: 55%;
+  text-align: left;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Sort Button */
@@ -161,6 +166,7 @@
 .operation-label {
   font-weight: 500;
   color: var(--text);
+  white-space: nowrap;
 }
 
 .col-timestamp {
@@ -225,6 +231,7 @@
 @media (max-width: 768px) {
   .log-table {
     font-size: 13px;
+    table-layout: auto;
   }
 
   .log-table th,
@@ -235,6 +242,10 @@
   .log-table .col-timestamp {
     width: 140px;
     font-size: 12px;
+  }
+
+  .log-table .col-details {
+    min-width: 220px;
   }
 
   .col-operation {

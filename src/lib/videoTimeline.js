@@ -33,9 +33,11 @@ export function timelineToSourceTime(segments, time) {
   const t = Math.max(0, Number(time) || 0);
   if (!Array.isArray(segments) || !segments.length) return 0;
   let cursor = 0;
-  for (const segment of segments) {
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
     const dur = segmentDuration(segment);
-    if (t >= cursor && t <= cursor + dur) {
+    const isLastSegment = index === segments.length - 1;
+    if (t >= cursor && (t < cursor + dur || (isLastSegment && t <= cursor + dur))) {
       const within = Math.min(dur, Math.max(0, t - cursor));
       return Number(segment.start || 0) + within;
     }
@@ -47,16 +49,19 @@ export function timelineToSourceTime(segments, time) {
 
 // Map a source video time to the first matching composed timeline time.
 // If the source time does not fall inside any segment, returns null.
-export function sourceToTimelineTime(segments, sourceTime, preferredTimelineTime = null) {
+export function sourceToTimelineTime(segments, sourceTime, preferredTimelineTime = null, sourceId = null) {
   const s = Number(sourceTime);
   if (!Number.isFinite(s)) return null;
   const matches = [];
   let cursor = 0;
-  for (const segment of segments) {
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
     const segStart = Number(segment.start || 0);
     const segEnd = Number(segment.end || 0);
     const dur = Math.max(0, segEnd - segStart);
-    if (s >= segStart && s <= segEnd) {
+    const isLastSegment = index === segments.length - 1;
+    const belongsToSource = !sourceId || segment.sourceId === sourceId || segment.filePath === sourceId;
+    if (belongsToSource && s >= segStart && (s < segEnd || (isLastSegment && s <= segEnd))) {
       matches.push(cursor + Math.min(dur, Math.max(0, s - segStart)));
     }
     cursor += dur;
@@ -64,7 +69,7 @@ export function sourceToTimelineTime(segments, sourceTime, preferredTimelineTime
   if (!matches.length) return null;
   if (!Number.isFinite(preferredTimelineTime)) return matches[0];
   return matches.reduce((closest, candidate) => (
-    Math.abs(candidate - preferredTimelineTime) < Math.abs(closest - preferredTimelineTime) ? candidate : closest
+    Math.abs(candidate - preferredTimelineTime) <= Math.abs(closest - preferredTimelineTime) ? candidate : closest
   ), matches[0]);
 }
 

@@ -4,13 +4,13 @@ import {
   segmentDuration,
   timelineDuration,
   timelineSegmentAtTime,
+  timelineToSourceTime,
   normalizeRange,
   formatVideoTime,
   splitSegmentsAtTimelinePositions
 } from "./lib/videoTimeline.js";
 import TimelineEditor, { TimelinePanel } from "./components/Timeline.jsx";
 import CropEditor from "./components/CropEditor.jsx";
-import LoadingIndicator from "./components/LoadingIndicator.jsx";
 import ExportScreen from "./components/Export.jsx";
 import OperationLogPanel from "./components/log/OperationLogPanel.jsx";
 import SourceTable from "./components/SourceTable.jsx";
@@ -23,7 +23,7 @@ import usePreviewBounds, {
 import useEditorHistory, { useEditorMessages } from "./hooks/useEditorHistory.jsx";
 import useOperationLogs, { useOperationLogger } from "./hooks/useOperationLogs.jsx";
 import useCropPresets, { useCropActions, useCropSelection } from "./hooks/useCropPresets.jsx";
-import useSourceLoader, { useLoadingOverlay } from "./hooks/useSourceLoader.jsx";
+import useSourceLoader from "./hooks/useSourceLoader.jsx";
 import useTimelineEditingActions, {
   useTimelineActions,
   useTimelineDurationSync
@@ -73,7 +73,6 @@ export default function VideoEditorApp() {
   const [timelineToast, setTimelineToast] = useState("");
   const [timelineToastKind, setTimelineToastKind] = useState("success");
   const timelineToastTimerRef = useRef(null);
-  const [selectedClipIndex, setSelectedClipIndex] = useState(null);
   const [cutMarkers, setCutMarkers] = useState([]); // array of { start, end }
   const [outputPath, setOutputPath] = useState("");
   const [outputDirectoryPath, setOutputDirectoryPath] = useState(() => {
@@ -162,6 +161,14 @@ export default function VideoEditorApp() {
     segments,
     setPlayhead
   });
+
+  useEffect(() => {
+    if (!sourceUrl || !segments.length || !previewVideoRef.current) return;
+    const sourceTime = timelineToSourceTime(segments, playhead);
+    if (Math.abs((Number(previewVideoRef.current.currentTime) || 0) - sourceTime) > 0.05) {
+      previewVideoRef.current.currentTime = sourceTime;
+    }
+  }, [sourceUrl]);
 
   const {
     isPreviewReady,
@@ -283,20 +290,6 @@ export default function VideoEditorApp() {
     pushUndoSnapshot,
     messages
   });
-  const {
-    loadStartTimeRef,
-    loadCompletionTimeoutRef,
-    isLoading,
-    setIsLoading,
-    loadingProgress,
-    setLoadingProgress,
-    loadingMessage,
-    setLoadingMessage,
-    loadingIndeterminate,
-    setLoadingIndeterminate,
-    clearLoadCompletionTimeout,
-    stopLoadingOverlay
-  } = useLoadingOverlay();
   const registerSource = useCallback((source) => {
     if (sourcePathsRef.current.has(source.filePath)) {
       showTimelineToast(t("sameFile"), "error");
@@ -328,15 +321,7 @@ export default function VideoEditorApp() {
     resetCropSelection,
     setOperationLogs,
     isOperationTypeEnabled,
-    setIsLoading,
-    setLoadingProgress,
-    setLoadingMessage,
-    setLoadingIndeterminate,
     backupSourceOnImport,
-    loadStartTimeRef,
-    loadCompletionTimeoutRef,
-    clearLoadCompletionTimeout,
-    stopLoadingOverlay,
     messages
   });
   const handleSelectSource = (source) => {
@@ -409,6 +394,31 @@ export default function VideoEditorApp() {
     }]);
     showTimelineToast(t("addedToTimeline", source.fileName));
   };
+  const handleSelectTimelineSegment = useCallback((index) => {
+    if (index < 0 || index >= segments.length) return;
+    const segment = segments[index];
+    const start = segments
+      .slice(0, index)
+      .reduce((total, item) => total + segmentDuration(item), 0);
+    const end = start + segmentDuration(segment);
+    const source = sources.find((item) => item.id === segment.sourceId || item.filePath === segment.filePath);
+    const shouldSwitchSource = Boolean(source && source.filePath !== sourcePath);
+
+    if (shouldSwitchSource) {
+      setSourcePath(source.filePath);
+      setSourceUrl(source.fileUrl || "");
+      setSourceName(source.fileName || source.filePath);
+      if (source.info) setMetadata(source.info);
+    }
+    setSelectedSegmentIndex(index);
+    setSelectionStart(start);
+    setSelectionEnd(end);
+    if (shouldSwitchSource) {
+      setPlayhead(start);
+    } else {
+      setPlayheadWithPreview(start);
+    }
+  }, [segments, setMetadata, setPlayheadWithPreview, sourcePath, sources]);
   const { handleChooseOutput, handleChooseOutputFolder, handleOpenExportConfirm, handleCloseExportConfirm } = useExportDialogActions({
     editorApi,
     sourceName,
@@ -654,13 +664,6 @@ export default function VideoEditorApp() {
 
   return (
     <>
-      <LoadingIndicator
-        isVisible={isLoading}
-        message={loadingMessage}
-        progress={loadingProgress}
-        indeterminate={loadingIndeterminate}
-        startTime={loadStartTimeRef.current}
-      />
       {timelineToast ? <div className={`timeline-toast timeline-toast--${timelineToastKind}`} role="status">{timelineToast}</div> : null}
       <SettingsModal
         t={t}
@@ -700,7 +703,7 @@ export default function VideoEditorApp() {
             <p>{status}</p>
           </div>
 
-          <div className="hero-actions" style={{ marginRight: 12 }}>
+          <div className="hero-actions editor-toolbar" style={{ marginRight: 12 }}>
             <div className="language-switcher" aria-label={t("language")}>
               <button
                 type="button"
@@ -719,7 +722,7 @@ export default function VideoEditorApp() {
                 JP
               </button>
             </div>
-            <button type="button" onClick={handleChooseSource}>{t("chooseVideo")}</button>
+            <button type="button" onClick={handleChooseSource}>{t("chooseMedia")}</button>
 
             <button 
               type="button" 
@@ -860,7 +863,7 @@ export default function VideoEditorApp() {
             onPlayheadChange={setPlayheadWithPreview}
             onSelectionStartChange={setSelectionStart}
             onSelectionEndChange={setSelectionEnd}
-            onSegmentClick={(_segment, index) => setSelectedSegmentIndex(index)}
+            onSegmentClick={(_segment, index) => handleSelectTimelineSegment(index)}
             selectedSegmentIndex={selectedSegmentIndex}
             onMoveSegment={moveSegment}
             onSegmentDrop={moveSegmentToTimelinePosition}
@@ -883,38 +886,6 @@ export default function VideoEditorApp() {
         </div>
       ) : null}
 
-      {/* clip chooser */}
-      <div className="clipboard-strip">
-        <div className="clipboard-strip-head">{t("clips")}</div>
-        <div className="clipboard-items">
-          {clipBank.length ? (
-            clipBank.map((clip, idx) => {
-              const dur = timelineDuration(clip);
-              const start = clip[0]?.start || 0;
-              const end = clip[clip.length - 1]?.end || 0;
-              return (
-                <div className="clip-item" key={`clip-${idx}-${start}-${end}`}>
-                  <button
-                    type="button"
-                    className={`clip-button${selectedClipIndex === idx ? " clip-button--selected" : ""}`}
-                    onClick={() => { setClipboard(clip); setSelectionStart(start); setSelectionEnd(end); setSelectedClipIndex(idx); }}
-                  >
-                    {formatVideoTime(start)} - {formatVideoTime(end)} ({formatVideoTime(dur)})
-                  </button>
-                  <div className="clip-actions">
-                    <button type="button" className="ghost-button seek-button" onClick={() => setPlayheadWithPreview(start)}>{t("seek")}</button>
-                    <button type="button" className="ghost-button" onClick={() => handleInsertClip(clip)}>{t("insert")}</button>
-                    <button type="button" className="timeline-item-delete" onClick={() => setClipBank((c) => c.filter((_, i) => i !== idx))}>{t("delete")}</button>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="clipboard-empty">{t("copiedRange")}</div>
-          )}          
-        </div>
-      </div>
-        
       <ButtonContent
         t={t}
         handleCopy={handleCopy}
@@ -963,7 +934,6 @@ export default function VideoEditorApp() {
           <TimelinePanel
             t={t}
             segments={segments}
-            clipBank={clipBank}
             timelineParts={timelineParts}
             selectedSegmentIndex={selectedSegmentIndex}
             isExporting={isExporting}
@@ -972,18 +942,7 @@ export default function VideoEditorApp() {
             onInsertTimelinePart={handleInsertTimelinePart}
             onDeleteTimelinePart={handleDeleteTimelinePart}
             onMoveSegmentToIndex={moveSegmentToIndex}
-            onInsertClip={handleInsertClip}
-            onSelectSegment={(index) => {
-              if (index < 0 || index >= segments.length) return;
-              const start = segments
-                .slice(0, index)
-                .reduce((total, segment) => total + segmentDuration(segment), 0);
-              const end = start + segmentDuration(segments[index]);
-              setSelectedSegmentIndex(index);
-              setSelectionStart(start);
-              setSelectionEnd(end);
-              setPlayheadWithPreview(start);
-            }}
+            onSelectSegment={handleSelectTimelineSegment}
           />
 
           <section className="side-section export-panel">

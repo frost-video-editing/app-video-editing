@@ -82,6 +82,7 @@ function getTimelineFileNumber(segment, segments, fallbackNumber) {
 }
 
 function TimelineVisualizer({
+  t: translate,
   playhead = 0,
   selectionStart = 0,
   selectionEnd = 0,
@@ -93,7 +94,8 @@ function TimelineVisualizer({
   onSegmentClick = () => {},
   onSegmentDrop = () => {}
 }) {
-  const { t } = useLanguage();
+  const { t: localTranslate } = useLanguage();
+  const t = translate || localTranslate;
   const containerRef = useRef(null);
   const [draggingMode, setDraggingMode] = useState(null); // null | playhead | start | end | timeline | segment drag
   const [containerWidth, setContainerWidth] = useState(0);
@@ -278,7 +280,7 @@ function TimelineVisualizer({
         <div
           className="timeline-scrubber"
           style={{ left: `${(playheadPx / containerWidth) * 100}%` }}
-          title={`Current: ${formatTimeShort(playhead)}`}
+          title={`${t("currentTimeline")}: ${formatTimeShort(playhead)}`}
         />
       </div>
 
@@ -301,6 +303,7 @@ function TimelineVisualizer({
 }
 
 function TimelineEditor({
+  t: translate,
   playhead,
   selectionStart,
   selectionEnd,
@@ -315,12 +318,12 @@ function TimelineEditor({
   onMoveSegment,
   onSegmentDrop
 }) {
-  const { t } = useLanguage();
   const selectedSegment = selectedSegmentIndex === null ? null : segments[selectedSegmentIndex];
 
   return (
     <>
       <TimelineVisualizer
+        t={translate}
         playhead={playhead}
         selectionStart={selectionStart}
         selectionEnd={selectionEnd}
@@ -338,8 +341,8 @@ function TimelineEditor({
 }
 
 export function TimelinePanel({
+  t: translate,
   segments,
-  clipBank = [],
   timelineParts = [],
   selectedSegmentIndex = null,
   isExporting,
@@ -347,11 +350,11 @@ export function TimelinePanel({
   onInsertTimelinePart,
   onDeleteTimelinePart,
   onMoveSegmentToIndex,
-  onInsertClip,
   onSelectSegment,
   onExtractSegmentAudio
 }) {
-  const { t } = useLanguage();
+  const { t: localTranslate } = useLanguage();
+  const t = translate || localTranslate;
   const [draggedIndex, setDraggedIndex] = useState(null);
   resetSegmentNumbersIfNewTimeline(segments);
 
@@ -471,31 +474,6 @@ export function TimelinePanel({
         {!timelineItems.length ? <div className="timeline-empty">{t("noSegments")}</div> : null}
       </div>
 
-      <div className="clip-bank-panel">
-        <div className="panel-head-meta">{t("clips")}</div>
-        {clipBank.length ? (
-          <div className="clip-bank-list">
-            {clipBank.map((clip, index) => (
-              <div className="clip-bank-item" key={`side-clip-${index}`}>
-                <div>
-                  <strong>{t("clipNumber", index + 1)}</strong>
-                  <span>{formatVideoTime(timelineDuration(clip))}</span>
-                </div>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => onInsertClip(clip)}
-                  disabled={isExporting}
-                >
-                  {t("insert")}
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="timeline-empty">{t("copiedRange")}</div>
-        )}
-      </div>
     </section>
   );
 }

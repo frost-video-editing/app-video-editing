@@ -44,6 +44,13 @@ export default function OperationLogView({
       crop: t("crop"), export: t("output"), load: t("loadVideo")
     }[operationType] || operationType;
   }
+  function getDetailSummary(details) {
+    if (!details || typeof details !== "object") return "-";
+    return Object.entries(details)
+      .slice(0, 2)
+      .map(([key, value]) => `${key}: ${typeof value === "object" ? JSON.stringify(value) : String(value)}`)
+      .join(" / ") || "-";
+  }
 
   function handleSort(column) {
     if (sortColumn === column) {
@@ -161,7 +168,7 @@ export default function OperationLogView({
                       <td className="col-number">{filteredLogs.length - filteredLogs.indexOf(log)}</td>
                       <td className="col-operation"><span className="operation-icon">{getOperationIcon(log.operationType)}</span><span className="operation-label">{getOperationLabel(log.operationType)}</span></td>
                       <td className="col-timestamp">{formatTimestamp(log.timestamp)}</td>
-                      <td className="col-details"><span className="expand-indicator">{expandedId === log.id ? "▼" : "▶"}</span></td>
+                      <td className="col-details" title={getDetailSummary(log.details)}>{getDetailSummary(log.details)}</td>
                     </tr>
                     {expandedId === log.id && log.details && (
                       <tr className="log-details-row"><td colSpan="4"><div className="log-details-content"><table className="details-table"><tbody>

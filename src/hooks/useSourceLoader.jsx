@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 import { createLoadLog } from "../lib/operationLog.js";
 import { editorMessages } from "../lib/editorMessages.js";
 import useLanguage from "./useLanguage.jsx";
@@ -18,12 +18,10 @@ export default function useSourceLoader({
   setSourceName,
   registerSource,
   setMetadata,
-  setSegments,
   setSelectionStart,
   setSelectionEnd,
   setPlayheadWithPreview,
   setClipboard,
-  setTimelineParts,
   setOutputPath,
   setCrop,
   emptyCrop,
@@ -31,49 +29,28 @@ export default function useSourceLoader({
   resetCropSelection,
   setOperationLogs,
   isOperationTypeEnabled = () => true,
-  setIsLoading,
-  setLoadingProgress,
-  setLoadingMessage,
-  setLoadingIndeterminate,
   backupSourceOnImport = false,
-  loadStartTimeRef,
-  loadCompletionTimeoutRef,
-  clearLoadCompletionTimeout,
-  stopLoadingOverlay,
   messages
 }) {
   const { t } = useLanguage();
   const loadSource = useCallback(async (result) => {
     if (!result?.filePath) {
-      stopLoadingOverlay();
       messages.setErrorMessage(editorMessages.videoNotFound);
       messages.setStatusMessage(editorMessages.loadFailed);
       return;
     }
 
     if (!editorApi) {
-      stopLoadingOverlay();
       messages.setErrorMessage(editorMessages.desktopShellRequired);
       messages.setStatusMessage(editorMessages.loadFailed);
       return;
     }
 
     messages.clearErrorOnly();
-    setIsLoading(true);
-    setLoadingProgress(0);
-    setLoadingMessage(t("selectingFile"));
-    setLoadingIndeterminate(true);
-    loadStartTimeRef.current = Date.now();
 
     try {
-      setLoadingProgress(10);
-      setLoadingMessage(t("loadingVideoInfo"));
       const mediaType = result.mediaType || getMediaType(result.fileName || result.filePath);
       const info = result.info || (await editorApi.probeVideo(result.filePath));
-
-      setLoadingProgress(40);
-      setLoadingMessage(t("processingMetadata"));
-      setLoadingIndeterminate(false);
 
       const nextSourceName = result.fileName || result.filePath.split(/[\\/]/).pop() || "video";
       const wasRegistered = registerSource?.({
@@ -84,19 +61,15 @@ export default function useSourceLoader({
         mediaType
       });
       if (wasRegistered === false) {
-        stopLoadingOverlay();
         return;
       }
       if (mediaType !== "video") {
-        stopLoadingOverlay();
         return;
       }
       setSourcePath(result.filePath);
       setSourceUrl(result.fileUrl);
       setSourceName(nextSourceName);
 
-      setLoadingProgress(70);
-      setLoadingMessage(t("buildingTimeline"));
       setMetadata(info);
       
       // Loading a source prepares it for editing but does not place it on the timeline.
@@ -109,23 +82,15 @@ export default function useSourceLoader({
       clearUndoHistory();
       resetCropSelection();
 
-      setLoadingProgress(100);
-      setLoadingMessage(t("complete"));
-      clearLoadCompletionTimeout();
-      loadCompletionTimeoutRef.current = setTimeout(() => {
-        stopLoadingOverlay();
-        messages.setStatusMessage(t("videoLoaded"));
-        if (isOperationTypeEnabled("load")) {
-          setOperationLogs((current) => [...current, createLoadLog(nextSourceName, info, result.filePath)]);
-        }
-      }, 500);
+      messages.setStatusMessage(t("videoLoaded"));
+      if (isOperationTypeEnabled("load")) {
+        setOperationLogs((current) => [...current, createLoadLog(nextSourceName, info, result.filePath)]);
+      }
     } catch (error) {
-      stopLoadingOverlay();
-      setLoadingProgress(0);
       messages.setErrorMessage(error?.message || editorMessages.videoLoadingFailed);
       messages.setStatusMessage(editorMessages.loadFailed);
     }
-  }, [clearLoadCompletionTimeout, clearUndoHistory, editorApi, emptyCrop, isOperationTypeEnabled, loadCompletionTimeoutRef, messages, registerSource, resetCropSelection, setClipboard, setCrop, setIsLoading, setLoadingIndeterminate, setLoadingMessage, setLoadingProgress, setMetadata, setOperationLogs, setOutputPath, setPlayheadWithPreview, setSelectionEnd, setSelectionStart, setSegments, setSourceName, setSourcePath, setSourceUrl, setTimelineParts, stopLoadingOverlay]);
+  }, [clearUndoHistory, editorApi, emptyCrop, isOperationTypeEnabled, messages, registerSource, resetCropSelection, setClipboard, setCrop, setMetadata, setOperationLogs, setOutputPath, setPlayheadWithPreview, setSelectionEnd, setSelectionStart, setSourceName, setSourcePath, setSourceUrl, t]);
 
   const handleChooseSource = useCallback(async () => {
     if (!editorApi) {
@@ -133,16 +98,9 @@ export default function useSourceLoader({
       return;
     }
 
-    setIsLoading(true);
-    setLoadingProgress(0);
-    setLoadingMessage(t("openingFileDialog"));
-    setLoadingIndeterminate(true);
-    loadStartTimeRef.current = Date.now();
-
     try {
       const results = await editorApi.selectSource();
       if (!results?.length) {
-        stopLoadingOverlay();
         messages.setStatusMessage(t("videoSelectionCancelled"));
         return;
       }
@@ -174,56 +132,11 @@ export default function useSourceLoader({
           messages.setErrorMessage(error?.message || t("videoLoadingFailed"));
         }
       }
-      if (!activeVideoLoaded) stopLoadingOverlay();
     } catch (error) {
-      stopLoadingOverlay();
-      setLoadingProgress(0);
       messages.setErrorMessage(error?.message || editorMessages.videoSelectionFailed);
       messages.setStatusMessage(editorMessages.loadFailed);
     }
-  }, [backupSourceOnImport, editorApi, loadSource, loadStartTimeRef, messages, registerSource, setIsLoading, setLoadingIndeterminate, setLoadingMessage, setLoadingProgress, stopLoadingOverlay, t]);
+  }, [backupSourceOnImport, editorApi, loadSource, messages, registerSource, t]);
 
   return { loadSource, handleChooseSource };
-}
-
-export function useLoadingOverlay() {
-  const loadStartTimeRef = useRef(null);
-  const loadCompletionTimeoutRef = useRef(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const [loadingMessage, setLoadingMessage] = useState("");
-  const [loadingIndeterminate, setLoadingIndeterminate] = useState(false);
-
-  function clearLoadCompletionTimeout() {
-    if (loadCompletionTimeoutRef.current) {
-      clearTimeout(loadCompletionTimeoutRef.current);
-      loadCompletionTimeoutRef.current = null;
-    }
-  }
-
-  function stopLoadingOverlay() {
-    clearLoadCompletionTimeout();
-    setIsLoading(false);
-    setLoadingMessage("");
-    setLoadingIndeterminate(false);
-    setLoadingProgress(0);
-    loadStartTimeRef.current = null;
-  }
-
-  useEffect(() => () => clearLoadCompletionTimeout(), []);
-
-  return {
-    loadStartTimeRef,
-    loadCompletionTimeoutRef,
-    isLoading,
-    setIsLoading,
-    loadingProgress,
-    setLoadingProgress,
-    loadingMessage,
-    setLoadingMessage,
-    loadingIndeterminate,
-    setLoadingIndeterminate,
-    clearLoadCompletionTimeout,
-    stopLoadingOverlay
-  };
 }
