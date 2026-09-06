@@ -54,6 +54,7 @@ export default function VideoEditorApp() {
 
   const [sourcePath, setSourcePath] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
+  const [sourceMediaType, setSourceMediaType] = useState("video");
   const [sourceName, setSourceName] = useState("");
   const [sources, setSources] = useState([]);
   const [pendingSourceRemoval, setPendingSourceRemoval] = useState(null);
@@ -61,7 +62,7 @@ export default function VideoEditorApp() {
 
   const [metadata, setMetadata] = useState({ duration: 0, width: 0, height: 0, hasAudio: false });
   const [segments, setSegments] = useState([]);
-  const previewSourceUrl = segments.length > 0 ? sourceUrl : "";
+  const previewSourceUrl = sourceUrl;
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(null);
   const [selectionStart, setSelectionStart] = useState(0);
   const [selectionEnd, setSelectionEnd] = useState(0);
@@ -80,6 +81,9 @@ export default function VideoEditorApp() {
     return window.localStorage.getItem("videoEditor.outputDirectoryPath") || "";
   });
   const [audioOnly, setAudioOnly] = useState(false);
+  const [immediateDelete, setImmediateDelete] = useState(() => (
+    window.localStorage.getItem("videoEditor.immediateDelete") === "true"
+  ));
   const [isExportConfirmOpen, setIsExportConfirmOpen] = useState(false);
   const [preserveCropResolution, setPreserveCropResolution] = useState(true);
   const [backupSourceOnImport, setBackupSourceOnImport] = useState(() => {
@@ -305,6 +309,7 @@ export default function VideoEditorApp() {
     editorApi,
     setSourcePath,
     setSourceUrl,
+    setSourceMediaType,
     setSourceName,
     registerSource,
     setMetadata,
@@ -325,7 +330,7 @@ export default function VideoEditorApp() {
     messages
   });
   const handleSelectSource = (source) => {
-    loadSource(source);
+    loadSource(source, { skipRegister: true });
   };
   const removeSource = (source) => {
     const remainingSources = sources.filter((item) => item.filePath !== source.filePath);
@@ -344,6 +349,7 @@ export default function VideoEditorApp() {
     if (!remainingSources.length) {
       setSourcePath("");
       setSourceUrl("");
+      setSourceMediaType("video");
       setSourceName("");
       setMetadata({ duration: 0, width: 0, height: 0, hasAudio: false });
       setSegments([]);
@@ -407,8 +413,14 @@ export default function VideoEditorApp() {
     if (shouldSwitchSource) {
       setSourcePath(source.filePath);
       setSourceUrl(source.fileUrl || "");
+      setSourceMediaType(source.mediaType || "video");
       setSourceName(source.fileName || source.filePath);
-      if (source.info) setMetadata(source.info);
+      if (source.info) {
+        setMetadata({
+          ...source.info,
+          duration: source.mediaType === "image" ? 5 : source.info.duration
+        });
+      }
     }
     setSelectedSegmentIndex(index);
     setSelectionStart(start);
@@ -425,6 +437,7 @@ export default function VideoEditorApp() {
     sourcePath,
     segments,
     isExporting,
+    isExportConfirmOpen,
     setOutputPath,
     setIsExportConfirmOpen,
     messages
@@ -484,7 +497,7 @@ export default function VideoEditorApp() {
     return getCroppedPreviewVideoStyle(crop);
   }, [crop, hasCrop, isCropPreviewLocked]);
 
-  const isPreviewAudioOnly = Boolean(timelineSegmentAtTime(segments, playhead)?.audioOnly);
+  const isPreviewAudioOnly = sourceMediaType === "audio" || Boolean(timelineSegmentAtTime(segments, playhead)?.audioOnly);
 
   const previewViewportStyle = useMemo(() => {
     if (!isCropPreviewLocked || !hasCrop || !previewBounds) {
@@ -527,6 +540,7 @@ export default function VideoEditorApp() {
     setClipboard,
     setClipBank,
     setTimelineParts,
+    immediateDelete,
     setSegments,
     setSelectionStart,
     setSelectionEnd,
@@ -689,6 +703,8 @@ export default function VideoEditorApp() {
         setAudioGainPercent={setAudioGainPercent}
         audioNormalize={audioNormalize}
         setAudioNormalize={setAudioNormalize}
+        immediateDelete={immediateDelete}
+        setImmediateDelete={setImmediateDelete}
         excludedOperationTypes={excludedOperationTypes}
         setExcludedOperationTypes={setExcludedOperationTypes}
       />
@@ -784,9 +800,7 @@ export default function VideoEditorApp() {
         <article className="panel panel--preview card">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">
-                <h2>{t("preview")}</h2>
-              </p>
+              <h2>{t("preview")}</h2>
             </div>
           </div>
 
@@ -794,6 +808,7 @@ export default function VideoEditorApp() {
             stageRef={previewStageRef}
             videoRef={previewVideoRef}
             sourceUrl={previewSourceUrl}
+            mediaType={sourceMediaType}
             isCropSelecting={isCropSelecting}
             previewBounds={previewBounds}
             previewViewportStyle={previewViewportStyle}
@@ -953,7 +968,7 @@ export default function VideoEditorApp() {
             </div>
 
             <div className="action-row export-actions">
-              <button type="button" onClick={handleOpenExportConfirm} disabled={isExporting || !segments.length || !sourcePath}>
+              <button type="button" onClick={handleOpenExportConfirm} disabled={isExporting || isExportConfirmOpen || !segments.length || !sourcePath}>
                 {isExporting ? t("exporting") : t("export")}
               </button>
             </div>

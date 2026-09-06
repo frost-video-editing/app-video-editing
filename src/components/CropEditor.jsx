@@ -7,6 +7,7 @@ export default function CropEditor({
   stageRef,
   videoRef,
   sourceUrl,
+  mediaType = "video",
   isCropSelecting,
   previewBounds,
   previewViewportStyle,
@@ -62,27 +63,56 @@ export default function CropEditor({
               className={`preview-video-viewport${isCropPreviewLocked && hasCrop ? " preview-video-viewport--cropped" : ""}`}
               style={previewViewportStyle}
             >
-              <video
-                key={sourceUrl}
-                ref={videoRef}
-                className={`preview-video${isPreviewAudioOnly ? " preview-video--audio-only" : ""}`}
-                src={sourceUrl}
-                style={previewVideoStyle}
-                playsInline
-                onTimeUpdate={onTimeUpdate}
-                onSeeked={onSeeked}
-                onPlay={onPlay}
-                onPause={onPause}
-                onEnded={onEnded}
-                onLoadStart={onLoadStart}
-                onLoadedMetadata={onLoadedMetadata}
-                onLoadedData={onLoadedData}
-                onCanPlay={onCanPlay}
-                onCanPlayThrough={onCanPlayThrough}
-                onProgress={onProgress}
-                onWaiting={onWaiting}
-                onError={onError}
-              />
+              {mediaType === "image" ? (
+                <img key={sourceUrl} className="preview-video preview-image" src={sourceUrl} alt={t("imageFile")} style={previewVideoStyle} />
+              ) : mediaType === "audio" ? (
+                <div className="preview-audio-card">
+                  <span className="preview-audio-icon" aria-hidden="true">♫</span>
+                  <strong>{t("audioFile")}</strong>
+                  <audio
+                    key={sourceUrl}
+                    ref={videoRef}
+                    className="preview-audio"
+                    src={sourceUrl}
+                    controls
+                    onTimeUpdate={onTimeUpdate}
+                    onSeeked={onSeeked}
+                    onPlay={onPlay}
+                    onPause={onPause}
+                    onEnded={onEnded}
+                    onLoadStart={onLoadStart}
+                    onLoadedMetadata={onLoadedMetadata}
+                    onLoadedData={onLoadedData}
+                    onCanPlay={onCanPlay}
+                    onCanPlayThrough={onCanPlayThrough}
+                    onProgress={onProgress}
+                    onWaiting={onWaiting}
+                    onError={onError}
+                  />
+                </div>
+              ) : (
+                <video
+                  key={sourceUrl}
+                  ref={videoRef}
+                  className={`preview-video${isPreviewAudioOnly ? " preview-video--audio-only" : ""}`}
+                  src={sourceUrl}
+                  style={previewVideoStyle}
+                  playsInline
+                  onTimeUpdate={onTimeUpdate}
+                  onSeeked={onSeeked}
+                  onPlay={onPlay}
+                  onPause={onPause}
+                  onEnded={onEnded}
+                  onLoadStart={onLoadStart}
+                  onLoadedMetadata={onLoadedMetadata}
+                  onLoadedData={onLoadedData}
+                  onCanPlay={onCanPlay}
+                  onCanPlayThrough={onCanPlayThrough}
+                  onProgress={onProgress}
+                  onWaiting={onWaiting}
+                  onError={onError}
+                />
+              )}
             </div>
             {previewBounds && (!isCropPreviewLocked || isCropSelecting) ? (
               <div
@@ -112,7 +142,7 @@ export default function CropEditor({
         )}
       </div>
 
-      {sourceUrl ? (
+      {sourceUrl && mediaType !== "image" ? (
         <div className="preview-transport">
           <button type="button" className="secondary-button" onClick={onTogglePlayback} disabled={!isPreviewReady}>
             {isPreviewPlaying ? t("stop") : t("play")}

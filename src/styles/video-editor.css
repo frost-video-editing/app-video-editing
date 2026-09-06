@@ -381,6 +381,8 @@ button:disabled {
 .preview-video-viewport {
   position: absolute;
   inset: 0;
+  display: grid;
+  place-items: center;
   overflow: hidden;
 }
 
@@ -402,6 +404,31 @@ button:disabled {
 
 .preview-video--audio-only {
   visibility: hidden;
+}
+
+.preview-image {
+  display: block;
+}
+
+.preview-audio-card {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  width: min(440px, calc(100% - 40px));
+  padding: 28px;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.preview-audio-icon {
+  color: var(--accent);
+  font-size: 48px;
+  line-height: 1;
+}
+
+.preview-audio {
+  width: 100%;
 }
 
 .preview-crop-overlay {

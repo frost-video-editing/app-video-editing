@@ -1,11 +1,24 @@
 # Frosty Studio
 
-Frost Studio is a desktop video editor for crop, trim, and timeline editing. Built with Tauri + React + Go + FFmpeg. All processing happens locally—no cloud uploads, no data transmission. Open source for transparency.
+Frost Studio is a desktop media editor for video, audio, and image sources. Built with Tauri + React + Go + FFmpeg. All processing happens locally—no cloud uploads, no data transmission. Open source for transparency.
+
+
+## Technology Stack
+
+| Technology | Description |
+| --- | --- |
+| **Tauri** | Desktop application shell and native system integration. |
+| **React** | Frontend UI components and editor state management. |
+| **JavaScript** | Frontend application logic. |
+| **Vite** | Frontend development server and production bundler. |
+| **Go** | Native media export process orchestration. |
+| **FFmpeg / FFprobe** | Local media probing, processing, encoding, and export. |
+| **Playwright** | Browser-based UI and workflow testing. |
 
 
 ## Why this application?
 
-Commercial video editors often upload files to the cloud, requiring long waits and raising privacy concerns about hidden data transfers. This app runs entirely on your machine using a locally bundled FFmpeg, keeping your video files and workflows private and fast.
+Commercial media editors often upload files to the cloud, requiring long waits and raising privacy concerns about hidden data transfers. This app runs entirely on your machine using a locally bundled FFmpeg, keeping your media files and workflows private and fast.
 
 
 ## Why Go instead of Rust?
@@ -25,13 +38,18 @@ Rust would also be a strong choice, but Go was a better fit for this project bec
 
 ## Features
 
-- **Crop** — Drag a crop area on the preview or enter numeric coordinates.
-- **Timeline editing** — Cut, delete, copy, and paste video segments to arrange them.
-- **Separate-file export** — Each timeline item is saved as its own MP4.
-- **Audio control** — Adjust volume (0–200%) and enable simple normalization.
-- **Crop-resolution choice** — Export at original resolution or at the crop's actual resolution.
-- **Hardware encoding** — Auto-detects NVIDIA, Intel, or AMD H.264 encoders. Falls back to CPU if unavailable.
-- **Progress window** — Shows real-time export status with per-segment progress.
+| Feature | Description |
+| --- | --- |
+| **Crop** | Drag a crop area on the preview or enter numeric coordinates.
+| **Media sources** | Import video, audio, and image files into one source library.
+| **Preview** | Preview video, audio, and image sources before adding them to the timeline.
+| **Timeline editing** | Cut, delete, copy, and paste media segments to arrange them.
+| **Multi-source timeline** | Combine segments from multiple source files in one timeline.
+| **Separate-file export** | Each timeline item is saved as its own output file.
+| **Audio control** | Adjust volume (0–200%) and enable simple normalization.
+| **Crop-resolution choice** | Export at original resolution or at the crop's actual resolution.
+| **Hardware encoding** | Auto-detects NVIDIA, Intel, or AMD H.264 encoders. Falls back to CPU if unavailable.
+| **Progress window** | Shows real-time export status with per-segment progress.
 
 
 ## Operation Logs
@@ -54,10 +72,11 @@ The exact folder can vary by Tauri/WebView2 runtime version. The logs are stored
 
 ## FAQ
 
+- **Can I use audio and image files?** — Yes. Audio and image sources can be previewed, added to the timeline, and included in exports. Images use a five-second default duration.
 - **Can I export audio only?** — Yes. Use the **Audio only** button on a timeline segment, or enable **Export audio only** in the export confirmation.
 - **Does it support subtitles?** — Not currently. Subtitle editing and subtitle burning are not supported yet.
 - **Is there a timeline zoom?** — Not currently. The timeline supports cutting, copying, pasting, deleting, and rearranging segments.
-- **Can I drag-and-drop files?** — Not currently. Use the source video picker to select a file. Timeline segments can be rearranged by dragging them.
+- **Can I drag-and-drop files?** — Not currently. Use the media picker to select files. Timeline segments can be rearranged by dragging them.
 
 
 ## Export
@@ -72,16 +91,16 @@ Disabling **Keep original resolution after crop** exports at the crop's actual r
 ```bash
 npm install
 npm run build:exporter
-npm run dev
+npm run react:start
 ```
 
 
 ## Workflow
 
-1. Select a source video.
-2. Set crop, preview, and cut the timeline.
-3. Use copy/delete/paste to arrange segments.
-4. Export to MP4 (one file per timeline item).
+1. Select one or more video, audio, or image sources.
+2. Preview the media, add sources to the timeline, and arrange segments.
+3. Set crop where applicable, then cut, copy, delete, or paste timeline ranges.
+4. Export the timeline (one output file per timeline item).
 
 
 ## Benchmark

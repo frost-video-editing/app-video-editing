@@ -75,6 +75,17 @@ export default function VideoExportSettings({ draft, updateDraft, t }) {
               </td>
               <td>{t("normalizeAudioDescription")}</td>
             </tr>
+            <tr>
+              <th scope="row">{t("immediateDelete")}</th>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={draft.immediateDelete}
+                  onChange={(event) => updateDraft("immediateDelete", event.target.checked)}
+                />
+              </td>
+              <td>{t("immediateDeleteDescription")}</td>
+            </tr>
           </tbody>
         </table>
       </div>

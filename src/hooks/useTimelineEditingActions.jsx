@@ -29,6 +29,7 @@ export default function useTimelineEditingActions({
   setClipboard,
   setClipBank,
   setTimelineParts,
+  immediateDelete = false,
   setSegments,
   setSelectionStart,
   setSelectionEnd,
@@ -42,6 +43,22 @@ export default function useTimelineEditingActions({
 }) {
   const { t } = useLanguage();
   const deletionTimersRef = useRef(new Set());
+  
+  // Preserves the current selection after a delete operation, adjusting it based on the next timeline duration.
+  const preserveSelectionAfterDelete = useCallback((nextDuration) => {
+    const selectedDuration = Math.max(0, Number(selectionEnd) - Number(selectionStart));
+    if (!selectedDuration || nextDuration <= 0) {
+      setSelectionStart(0);
+      setSelectionEnd(0);
+      return;
+    }
+
+    const nextEnd = Math.min(Math.max(Number(selectionEnd), selectedDuration), nextDuration);
+    const nextStart = Math.max(0, nextEnd - selectedDuration);
+    setSelectionStart(nextStart);
+    setSelectionEnd(nextEnd);
+  }, [selectionEnd, selectionStart, setSelectionEnd, setSelectionStart]);
+
   const handleCopy = useMemo(() => {
     const copySelection = createHandleCopySelection({
       segments,
@@ -64,14 +81,15 @@ export default function useTimelineEditingActions({
       return;
     }
     pushUndoSnapshot();
+    const nextSegments = removeRange(segments, selectedRange.start, selectedRange.end);
     setTimelineParts((current) => [...current, ...extractRange(segments, selectedRange.start, selectedRange.end)]);
-    setSegments(removeRange(segments, selectedRange.start, selectedRange.end));
-    setSelectionEnd(selectedRange.start);
+    setSegments(nextSegments);
+    preserveSelectionAfterDelete(timelineDuration(nextSegments));
     setPlayheadWithPreview(selectedRange.start);
     messages.setStatusMessage(t("selectionDeleted"));
     messages.clearErrorOnly();
     addOperationLog("delete");
-  }, [addOperationLog, messages, pushUndoSnapshot, selectedDuration, selectedRange, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setTimelineParts, t]);
+  }, [addOperationLog, messages, preserveSelectionAfterDelete, pushUndoSnapshot, selectedDuration, selectedRange, segments, setPlayheadWithPreview, setSegments, setTimelineParts, t]);
 
   const handleDeleteSegment = useCallback((index) => {
     if (index < 0 || index >= segments.length) return;
@@ -80,22 +98,26 @@ export default function useTimelineEditingActions({
     if (deletionTimersRef.current.has(deletionKey)) return;
     deletionTimersRef.current.add(deletionKey);
     pushUndoSnapshot();
-    showToast(t("deletionScheduled"));
-    window.setTimeout(() => {
+    const removeSegment = () => {
       deletionTimersRef.current.delete(deletionKey);
       setSegments((current) => {
         const nextSegments = current.filter((segment) => segment !== deletedSegment);
         const nextDuration = timelineDuration(nextSegments);
-        setSelectionStart((value) => clamp(value, 0, nextDuration));
-        setSelectionEnd((value) => clamp(value, 0, nextDuration));
+        preserveSelectionAfterDelete(nextDuration);
         setPlayheadWithPreview((value) => clamp(value, 0, nextDuration));
         return nextSegments;
       });
       messages.setStatusMessage(t("partDeleted", index + 1));
       messages.clearErrorOnly();
       addOperationLog("delete");
-    }, 3000);
-  }, [addOperationLog, messages, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, setSelectionEnd, setSelectionStart, showToast, t]);
+    };
+    if (immediateDelete) {
+      removeSegment();
+      return;
+    }
+    showToast(t("deletionScheduled"));
+    window.setTimeout(removeSegment, 3000);
+  }, [addOperationLog, immediateDelete, messages, preserveSelectionAfterDelete, pushUndoSnapshot, segments, setPlayheadWithPreview, setSegments, showToast, t]);
 
   const handleInsertTimelinePart = useCallback((part, index) => {
     if (!part) return;
@@ -119,15 +141,20 @@ export default function useTimelineEditingActions({
     if (deletionTimersRef.current.has(deletionKey)) return;
     deletionTimersRef.current.add(deletionKey);
     pushUndoSnapshot();
-    showToast(t("deletionScheduled"));
-    window.setTimeout(() => {
+    const removePart = () => {
       deletionTimersRef.current.delete(deletionKey);
       setTimelineParts((current) => current.filter((_, partIndex) => partIndex !== index));
       messages.setStatusMessage(t("partRemoved"));
       showToast(t("partRemoved"));
       messages.clearErrorOnly();
-    }, 3000);
-  }, [messages, pushUndoSnapshot, setTimelineParts, showToast, t]);
+    };
+    if (immediateDelete) {
+      removePart();
+      return;
+    }
+    showToast(t("deletionScheduled"));
+    window.setTimeout(removePart, 3000);
+  }, [immediateDelete, messages, pushUndoSnapshot, setTimelineParts, showToast, t]);
 
   const handleCut = useCallback(() => {
     const splitTime = clamp(Number(playhead) || 0, 0, totalDuration);

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { segmentDuration } from "../lib/videoTimeline.js";
 import { normalizeCropInput } from "../lib/crop.js";
 import { createExportLog } from "../lib/operationLog.js";
@@ -39,6 +39,7 @@ export default function useVideoExport({
   messages
 }) {
   const { t } = useLanguage();
+  const exportInProgressRef = useRef(false);
   return useCallback(async () => {
     if (!editorApi) {
       messages.setErrorMessage(editorMessages.desktopShellRequired);
@@ -54,14 +55,29 @@ export default function useVideoExport({
       messages.setErrorMessage(t("noExportSegments"));
       return;
     }
+    if (exportInProgressRef.current) return;
+    exportInProgressRef.current = true;
 
     const suggestedName = audioOnly
       ? (sourceName || "edited-video.mp4").replace(/\.[^.]+$/, "-audio.mp4")
       : (sourceName || "edited-video.mp4");
-    const chosenOutput = outputPath || (outputDirectoryPath
-      ? joinOutputPath(outputDirectoryPath, suggestedName)
-      : (await editorApi.selectOutput({ suggestedName }))?.filePath);
-    if (!chosenOutput) return;
+    let chosenOutput = outputPath;
+
+    try {
+      chosenOutput = chosenOutput || (outputDirectoryPath
+        ? joinOutputPath(outputDirectoryPath, suggestedName)
+        : (await editorApi.selectOutput({ suggestedName }))?.filePath);
+    } catch (error) {
+      exportInProgressRef.current = false;
+      console.error("Failed to choose an export output path.", error);
+      messages.setErrorMessage(error?.message || editorMessages.exportFailed);
+      return;
+    }
+    
+    if (!chosenOutput) {
+      exportInProgressRef.current = false;
+      return;
+    }
 
     setOutputPath(chosenOutput);
     setIsExporting(true);
@@ -78,7 +94,11 @@ export default function useVideoExport({
       const result = await editorApi.exportVideo({
         sourcePath,
         outputPath: chosenOutput,
-        segments: safeSegments,
+        segments: safeSegments.map((segment) => ({
+          ...segment,
+          sourcePath: segment.filePath || sourcePath,
+          mediaType: segment.mediaType || "video"
+        })),
         crop: normalizedCrop,
         preserveCropResolution,
         cropScaleAlgorithm,
@@ -112,6 +132,7 @@ export default function useVideoExport({
         messages.setStatusMessage(t("exportFailedStatus"));
       }
     } finally {
+      exportInProgressRef.current = false;
       setIsExporting(false);
       resetExportOverlay();
     }
