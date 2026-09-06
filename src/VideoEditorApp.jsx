@@ -73,7 +73,6 @@ export default function VideoEditorApp() {
   const [timelineToast, setTimelineToast] = useState("");
   const [timelineToastKind, setTimelineToastKind] = useState("success");
   const timelineToastTimerRef = useRef(null);
-  const [selectedClipIndex, setSelectedClipIndex] = useState(null);
   const [cutMarkers, setCutMarkers] = useState([]); // array of { start, end }
   const [outputPath, setOutputPath] = useState("");
   const [outputDirectoryPath, setOutputDirectoryPath] = useState(() => {
@@ -887,38 +886,6 @@ export default function VideoEditorApp() {
         </div>
       ) : null}
 
-      {/* clip chooser */}
-      <div className="clipboard-strip">
-        <div className="clipboard-strip-head">{t("clips")}</div>
-        <div className="clipboard-items">
-          {clipBank.length ? (
-            clipBank.map((clip, idx) => {
-              const dur = timelineDuration(clip);
-              const start = clip[0]?.start || 0;
-              const end = clip[clip.length - 1]?.end || 0;
-              return (
-                <div className="clip-item" key={`clip-${idx}-${start}-${end}`}>
-                  <button
-                    type="button"
-                    className={`clip-button${selectedClipIndex === idx ? " clip-button--selected" : ""}`}
-                    onClick={() => { setClipboard(clip); setSelectionStart(start); setSelectionEnd(end); setSelectedClipIndex(idx); }}
-                  >
-                    {formatVideoTime(start)} - {formatVideoTime(end)} ({formatVideoTime(dur)})
-                  </button>
-                  <div className="clip-actions">
-                    <button type="button" className="ghost-button seek-button" onClick={() => setPlayheadWithPreview(start)}>{t("seek")}</button>
-                    <button type="button" className="ghost-button" onClick={() => handleInsertClip(clip)}>{t("insert")}</button>
-                    <button type="button" className="timeline-item-delete" onClick={() => setClipBank((c) => c.filter((_, i) => i !== idx))}>{t("delete")}</button>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="clipboard-empty">{t("copiedRange")}</div>
-          )}          
-        </div>
-      </div>
-        
       <ButtonContent
         t={t}
         handleCopy={handleCopy}
@@ -967,7 +934,6 @@ export default function VideoEditorApp() {
           <TimelinePanel
             t={t}
             segments={segments}
-            clipBank={clipBank}
             timelineParts={timelineParts}
             selectedSegmentIndex={selectedSegmentIndex}
             isExporting={isExporting}
@@ -976,7 +942,6 @@ export default function VideoEditorApp() {
             onInsertTimelinePart={handleInsertTimelinePart}
             onDeleteTimelinePart={handleDeleteTimelinePart}
             onMoveSegmentToIndex={moveSegmentToIndex}
-            onInsertClip={handleInsertClip}
             onSelectSegment={handleSelectTimelineSegment}
           />
 

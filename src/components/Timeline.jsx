@@ -343,7 +343,6 @@ function TimelineEditor({
 export function TimelinePanel({
   t: translate,
   segments,
-  clipBank = [],
   timelineParts = [],
   selectedSegmentIndex = null,
   isExporting,
@@ -351,7 +350,6 @@ export function TimelinePanel({
   onInsertTimelinePart,
   onDeleteTimelinePart,
   onMoveSegmentToIndex,
-  onInsertClip,
   onSelectSegment,
   onExtractSegmentAudio
 }) {
@@ -476,31 +474,6 @@ export function TimelinePanel({
         {!timelineItems.length ? <div className="timeline-empty">{t("noSegments")}</div> : null}
       </div>
 
-      <div className="clip-bank-panel">
-        <div className="panel-head-meta">{t("clips")}</div>
-        {clipBank.length ? (
-          <div className="clip-bank-list">
-            {clipBank.map((clip, index) => (
-              <div className="clip-bank-item" key={`side-clip-${index}`}>
-                <div>
-                  <strong>{t("clipNumber", index + 1)}</strong>
-                  <span>{formatVideoTime(timelineDuration(clip))}</span>
-                </div>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => onInsertClip(clip)}
-                  disabled={isExporting}
-                >
-                  {t("insert")}
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="timeline-empty">{t("copiedRange")}</div>
-        )}
-      </div>
     </section>
   );
 }
