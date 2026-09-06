@@ -9,11 +9,19 @@ export default function useExportDialogActions({
   sourcePath,
   segments,
   isExporting,
+  isExportConfirmOpen,
   setOutputPath,
   setIsExportConfirmOpen,
   messages
 }) {
   const { t } = useLanguage();
+  const exportConfirmOpeningRef = useRef(false);
+
+  useEffect(() => {
+    if (!isExportConfirmOpen && !isExporting) {
+      exportConfirmOpeningRef.current = false;
+    }
+  }, [isExportConfirmOpen, isExporting]);
   const handleChooseOutput = useCallback(async () => {
     if (!editorApi) {
       messages.setErrorMessage(editorMessages.desktopShellRequired);
@@ -38,16 +46,21 @@ export default function useExportDialogActions({
   }, [editorApi, messages, t]);
 
   const handleOpenExportConfirm = useCallback(() => {
+    if (exportConfirmOpeningRef.current) return;
     if (!sourcePath || !segments.length) {
       messages.setErrorMessage(editorMessages.chooseVideoFirst);
       return;
     }
+    exportConfirmOpeningRef.current = true;
     messages.clearErrorOnly();
     setIsExportConfirmOpen(true);
   }, [messages, segments.length, setIsExportConfirmOpen, sourcePath]);
 
   const handleCloseExportConfirm = useCallback(() => {
-    if (!isExporting) setIsExportConfirmOpen(false);
+    if (!isExporting) {
+      exportConfirmOpeningRef.current = false;
+      setIsExportConfirmOpen(false);
+    }
   }, [isExporting, setIsExportConfirmOpen]);
 
   return { handleChooseOutput, handleChooseOutputFolder, handleOpenExportConfirm, handleCloseExportConfirm };

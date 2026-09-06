@@ -39,6 +39,8 @@
   "removeFromTimeline": "Remove from timeline",
   "partRemovedFromTimeline": "Part removed from the timeline.",
   "deletionScheduled": "This item will be removed from the timeline in 3 seconds.",
+  "immediateDelete": "Delete timeline items immediately",
+  "immediateDeleteDescription": "Skip the 3-second undo grace period when deleting a segment or removed timeline part.",
   "copiedRange": "Copied ranges will appear here.",
   "timelineParts": "Timeline parts",
   "partNumber": "Part {0}",

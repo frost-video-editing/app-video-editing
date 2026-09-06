@@ -81,6 +81,9 @@ export default function VideoEditorApp() {
     return window.localStorage.getItem("videoEditor.outputDirectoryPath") || "";
   });
   const [audioOnly, setAudioOnly] = useState(false);
+  const [immediateDelete, setImmediateDelete] = useState(() => (
+    window.localStorage.getItem("videoEditor.immediateDelete") === "true"
+  ));
   const [isExportConfirmOpen, setIsExportConfirmOpen] = useState(false);
   const [preserveCropResolution, setPreserveCropResolution] = useState(true);
   const [backupSourceOnImport, setBackupSourceOnImport] = useState(() => {
@@ -434,6 +437,7 @@ export default function VideoEditorApp() {
     sourcePath,
     segments,
     isExporting,
+    isExportConfirmOpen,
     setOutputPath,
     setIsExportConfirmOpen,
     messages
@@ -536,6 +540,7 @@ export default function VideoEditorApp() {
     setClipboard,
     setClipBank,
     setTimelineParts,
+    immediateDelete,
     setSegments,
     setSelectionStart,
     setSelectionEnd,
@@ -698,6 +703,8 @@ export default function VideoEditorApp() {
         setAudioGainPercent={setAudioGainPercent}
         audioNormalize={audioNormalize}
         setAudioNormalize={setAudioNormalize}
+        immediateDelete={immediateDelete}
+        setImmediateDelete={setImmediateDelete}
         excludedOperationTypes={excludedOperationTypes}
         setExcludedOperationTypes={setExcludedOperationTypes}
       />
@@ -961,7 +968,7 @@ export default function VideoEditorApp() {
             </div>
 
             <div className="action-row export-actions">
-              <button type="button" onClick={handleOpenExportConfirm} disabled={isExporting || !segments.length || !sourcePath}>
+              <button type="button" onClick={handleOpenExportConfirm} disabled={isExporting || isExportConfirmOpen || !segments.length || !sourcePath}>
                 {isExporting ? t("exporting") : t("export")}
               </button>
             </div>

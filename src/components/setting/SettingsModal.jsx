@@ -44,6 +44,8 @@ export default function SettingsModal({
   setAudioGainPercent,
   audioNormalize,
   setAudioNormalize,
+  immediateDelete,
+  setImmediateDelete,
   excludedOperationTypes,
   setExcludedOperationTypes
 }) {
@@ -74,6 +76,7 @@ export default function SettingsModal({
       outputDirectoryPath,
       audioGainPercent,
       audioNormalize,
+      immediateDelete,
       excludedOperationTypes: [...excludedOperationTypes]
     });
     setShortcuts(loadShortcuts());
@@ -175,6 +178,8 @@ export default function SettingsModal({
     window.localStorage.setItem("videoEditor.outputDirectoryPath", draft.outputDirectoryPath);
     setAudioGainPercent(draft.audioGainPercent);
     setAudioNormalize(draft.audioNormalize);
+    setImmediateDelete(draft.immediateDelete);
+    window.localStorage.setItem("videoEditor.immediateDelete", String(draft.immediateDelete));
     setExcludedOperationTypes(draft.excludedOperationTypes);
     onClose();
   };

@@ -40,6 +40,8 @@
   "removeFromTimeline": "タイムラインから外す",
   "partRemovedFromTimeline": "タイムラインからパーツを外しました。",
   "deletionScheduled": "3秒後にタイムラインから削除します。",
+  "immediateDelete": "タイムライン項目をすぐに削除",
+  "immediateDeleteDescription": "セグメントや外したパーツを削除するとき、3秒間の猶予をスキップします。",
   "copiedRange": "コピーした範囲はここに表示されます。",
   "timelineParts": "タイムラインのパーツ",
   "partNumber": "パーツ {0}",

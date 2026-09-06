@@ -102,6 +102,7 @@ function TimelineVisualizer({
   const [timeInput, setTimeInput] = useState(formatTimeShort(playhead));
   const [isTimeInputFocused, setIsTimeInputFocused] = useState(false);
   const [isTimeInputInvalid, setIsTimeInputInvalid] = useState(false);
+  const timelineInset = 7;
 
   useEffect(() => {
     if (!isTimeInputFocused) setTimeInput(formatTimeShort(playhead));
@@ -121,7 +122,7 @@ function TimelineVisualizer({
   useEffect(() => {
     const updateWidth = () => {
       if (containerRef.current) {
-        setContainerWidth(containerRef.current.offsetWidth);
+        setContainerWidth(containerRef.current.getBoundingClientRect().width);
       }
     };
     updateWidth();
@@ -130,12 +131,16 @@ function TimelineVisualizer({
     return () => observer.disconnect();
   }, []);
 
-  const pixelsPerSecond = containerWidth > 0 ? containerWidth / Math.max(totalDuration, 1) : 0;
+  const timelineWidth = Math.max(containerWidth - (timelineInset * 2), 0);
+  const pixelsPerSecond = timelineWidth > 0 ? timelineWidth / Math.max(totalDuration, 1) : 0;
   const timeToPixels = (time) => time * pixelsPerSecond;
   const pixelsToTime = (pixels) => {
+    if (!pixelsPerSecond) return 0;
     const time = pixels / pixelsPerSecond;
     return Math.max(0, Math.min(totalDuration, time));
   };
+
+  const getTimelineX = (clientX, rect) => clientX - rect.left - timelineInset;
 
   const handleMouseDown = (event, mode) => {
     event.preventDefault();
@@ -151,7 +156,7 @@ function TimelineVisualizer({
       return;
     }
 
-    const localX = event.clientX - rect.left;
+    const localX = getTimelineX(event.clientX, rect);
     const newTime = pixelsToTime(localX);
     setDraggingMode("timeline");
     onPlayheadChange(newTime);
@@ -163,7 +168,7 @@ function TimelineVisualizer({
     const handleMouseMove = (event) => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const localX = event.clientX - rect.left;
+      const localX = getTimelineX(event.clientX, rect);
       const newTime = pixelsToTime(localX);
 
       if (draggingMode === "playhead") {
@@ -183,7 +188,7 @@ function TimelineVisualizer({
       if (draggingMode !== null && typeof draggingMode === "object" && draggingMode.type === "segment" && draggingMode.moved) {
         const rect = containerRef.current?.getBoundingClientRect();
         if (rect) {
-          onSegmentDrop(draggingMode.index, pixelsToTime(event.clientX - rect.left));
+          onSegmentDrop(draggingMode.index, pixelsToTime(getTimelineX(event.clientX, rect)));
         }
       }
       setDraggingMode(null);
@@ -231,7 +236,7 @@ function TimelineVisualizer({
         <div className="timeline-adjustment-lane" aria-label={t("timelineAdjustments")}>
           <div
             className="timeline-adjustment-handle"
-            style={{ left: `${(playheadPx / Math.max(containerWidth, 1)) * 100}%` }}
+            style={{ left: `${playheadPx}px` }}
             onMouseDown={(event) => handleMouseDown(event, "playhead")}
             title={`${t("playhead")}: ${formatTimeShort(playhead)}`}
           />
@@ -279,7 +284,7 @@ function TimelineVisualizer({
 
         <div
           className="timeline-scrubber"
-          style={{ left: `${(playheadPx / containerWidth) * 100}%` }}
+          style={{ left: `${timelineInset + playheadPx}px` }}
           title={`${t("currentTimeline")}: ${formatTimeShort(playhead)}`}
         />
       </div>
