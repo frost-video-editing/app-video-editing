@@ -113,7 +113,7 @@
   "previewNormalSpeed": "プレビュー速度を通常に戻しました。",
   "previewSlowSpeed": "プレビュー速度を低速（0.5×）にしました。",
   "shortcutFailed": "ショートカットの実行に失敗しました。",
-  "shortcutCutUnavailable": "切り取りできる動画が読み込まれていないか、出力中のため操作できません。",
+  "shortcutCutUnavailable": "Add a source to the timeline before cutting, and wait for any export to finish.",
   "openingFileDialog": "ファイルダイアログを開いています...",
   "videoSelectionCancelled": "動画の選択をキャンセルしました。",
   "backupImportedFile": "インポートした元ファイルのバックアップを保存しますか？",

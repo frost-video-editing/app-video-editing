@@ -42,7 +42,7 @@ Rust would also be a strong choice, but Go was a better fit for this project bec
 | --- | --- |
 | **Crop** | Drag a crop area on the preview or enter numeric coordinates.
 | **Media sources** | Import video, audio, and image files into one source library.
-| **Preview** | Preview video, audio, and image sources before adding them to the timeline.
+| **Preview** | Preview video, audio, and image sources.
 | **Timeline editing** | Cut, delete, copy, and paste media segments to arrange them.
 | **Multi-source timeline** | Combine segments from multiple source files in one timeline.
 | **Separate-file export** | Each timeline item is saved as its own output file.
@@ -81,7 +81,7 @@ The exact folder can vary by Tauri/WebView2 runtime version. The logs are stored
 
 ## Export
 
-Crop operations require re-encoding. For CPU encoding, the app uses H.264 with `libx264 -fast -crf 18`. When a GPU encoder is available, it uses a faster, quality-balanced setting. On systems with 4+ cores, up to two timeline items are processed concurrently, with threads divided to avoid CPU contention.
+Crop operations require re-encoding. The Standard CPU profile uses H.264 with `libx264 -preset veryfast -crf 18`. The High quality profile uses `libx264 -preset slow -crf 14`, or a quality target of 15 with a supported NVIDIA, Intel, or AMD H.264 encoder. The encoder-specific quality scales are not directly comparable. High quality can take longer and produce larger files; it is still lossy and does not restore detail missing from the source. When neither video nor audio processing is needed, eligible exports copy the original streams without re-encoding. On systems with 4+ cores, up to two cropped timeline items are processed concurrently, with threads divided to avoid CPU contention.
 
 Disabling **Keep original resolution after crop** exports at the crop's actual resolution—faster, smaller files, and sharper results when upscaling is not needed.
 
@@ -94,6 +94,8 @@ npm run build:exporter
 npm run react:start
 ```
 
+If a Tauri build fails after moving the project or because of stale Cargo build metadata, stop running builds and run `npm run tauri:clean` from the project root. This removes generated Cargo build outputs from the configured target directory; the next Tauri build will recreate them and take longer.
+
 
 ## Workflow
 
@@ -101,6 +103,9 @@ npm run react:start
 2. Preview the media, add sources to the timeline, and arrange segments.
 3. Set crop where applicable, then cut, copy, delete, or paste timeline ranges.
 4. Export the timeline (one output file per timeline item).
+
+Newly imported videos are appended to the timeline automatically and will be included in exports. Audio and images remain in the media library until added to the timeline. When the timeline is empty, the preview playhead can seek through a loaded video or audio source without adding it.
+The default cut shortcut (`S`) requires a segment on the timeline and a playhead position between its ends. Shortcuts are ignored while typing in an input field.
 
 
 ## Benchmark
@@ -152,17 +157,15 @@ This video export completed in **1 minute and 25.97 seconds**.
 | Export time | 1 minute and 25.97 seconds |
 
 
-## License
+## **License**
 
 Free for personal and commercial use.
 However, you need to contact the author and developer for commercial use.
 
-Please see the [LICENSE](LICENSE) file for more details.
 
-
-### Support
+### **Support**
 
 If you find this app useful, please consider supporting its development. 
 Your support helps maintain and improve the app.
 
-Support: <a href="https://github.com/sponsors/KFrost-Sponsor" rel="noopener noreferrer" style="color: inherit; text-decoration: underline; cursor: pointer;">GitHub Sponsors</a>
+<a href="https://www.buymeacoffee.com/kfrost533" target="_blank"><img src="./img/buyMeATea.png" alt="Buy Me a Coffee" style="height: 60px !important;width: 217px !important;" ></a>

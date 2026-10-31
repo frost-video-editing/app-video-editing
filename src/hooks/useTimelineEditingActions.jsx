@@ -210,6 +210,25 @@ export default function useTimelineEditingActions({
   const moveSegmentToTimelinePosition = useCallback((index, timelinePosition) => {
     if (index < 0 || index >= segments.length) return;
 
+    // Determine if the segment is an audio overlay or not.
+    // Audio overlays share the same timeline with the main video track, but are treated separately for positioning.
+    const segment = segments[index];
+    const isAudioOverlay = segment.audioOnly || segment.mediaType === "audio" || segment.mimeType?.startsWith("audio/");
+    if (isAudioOverlay) {
+      const nextStart = clamp(Number(timelinePosition) || 0, 0, timelineDuration(segments));
+      pushUndoSnapshot();
+      setSegments((current) => current.map((item, itemIndex) => (
+        itemIndex === index ? { ...item, timelineStart: nextStart } : item
+      )));
+      setSelectedSegmentIndex(index);
+      setSelectionStart(nextStart);
+      setSelectionEnd(nextStart + segmentDuration(segment));
+      setPlayheadWithPreview(nextStart);
+      messages.setStatusMessage(t("partMoved", index + 1));
+      messages.clearErrorOnly();
+      return;
+    }
+
     const remaining = segments.filter((_, segmentIndex) => segmentIndex !== index);
     const dropTime = clamp(Number(timelinePosition) || 0, 0, timelineDuration(segments));
     let cursor = 0;

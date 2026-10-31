@@ -10,6 +10,10 @@ function formatSourceDuration(totalSeconds) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+// ===================
+// When you add a new media source, it will appear in this table.
+// SourceTable component displays a list of media sources with options to select, add to timeline, or remove.
+// ===================
 export default function SourceTable({ sources, activeSourcePath, onSelect, onRemove, onAdd, t }) {
   return (
     <section className="source-panel card" aria-labelledby="source-list-title">

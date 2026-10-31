@@ -114,7 +114,7 @@
   "previewNormalSpeed": "Preview speed restored to normal.",
   "previewSlowSpeed": "Preview speed set to slow (0.5x).",
   "shortcutFailed": "Shortcut execution failed.",
-  "shortcutCutUnavailable": "No editable video is loaded, or an export is in progress.",
+  "shortcutCutUnavailable": "Add a source to the timeline before cutting, and wait for any export to finish.",
   "openingFileDialog": "Opening file dialog...",
   "videoSelectionCancelled": "Video selection cancelled.",
   "backupImportedFile": "Save a backup of the imported source file?",

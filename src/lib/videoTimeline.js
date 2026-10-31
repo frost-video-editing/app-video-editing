@@ -8,15 +8,42 @@ export function clamp(value, min, max) {
 export function segmentDuration(segment) {
   return Math.max(0, Number(segment.end) - Number(segment.start));
 }
+export function isAudioOverlay(segment) {
+  return Boolean(segment?.audioOnly || segment?.mediaType === "audio" || segment?.mimeType?.startsWith("audio/"));
+}
 
+export function timelineSegmentStart(segments, segmentIndex) {
+  const segment = segments?.[segmentIndex];
+  if (!segment) return 0;
+  if (isAudioOverlay(segment) && Number.isFinite(Number(segment.timelineStart))) {
+    return Math.max(0, Number(segment.timelineStart));
+  }
+  return segments.slice(0, segmentIndex).reduce((total, item) => (
+    isAudioOverlay(item) ? total : total + segmentDuration(item)
+  ), 0);
+}
+
+// Calculate the total duration of the timeline, taking into account both the main video track and any audio overlay tracks.
 export function timelineDuration(segments) {
-  return segments.reduce((total, segment) => total + segmentDuration(segment), 0);
+  let mainTrackDuration = 0;
+  let overlayTrackDuration = 0;
+  for (const segment of Array.isArray(segments) ? segments : []) {
+    const duration = segmentDuration(segment);
+    if (isAudioOverlay(segment)) {
+      const start = Number.isFinite(Number(segment.timelineStart)) ? Math.max(0, Number(segment.timelineStart)) : mainTrackDuration;
+      overlayTrackDuration = Math.max(overlayTrackDuration, start + duration);
+    } else {
+      mainTrackDuration += duration;
+    }
+  }
+  return Math.max(mainTrackDuration, overlayTrackDuration);
 }
 
 export function timelineSegmentAtTime(segments, time) {
   const t = Math.max(0, Number(time) || 0);
   let cursor = 0;
   for (const segment of Array.isArray(segments) ? segments : []) {
+    if (isAudioOverlay(segment)) continue;
     const end = cursor + segmentDuration(segment);
     if (t >= cursor && t < end) {
       return segment;
@@ -35,6 +62,7 @@ export function timelineToSourceTime(segments, time) {
   let cursor = 0;
   for (let index = 0; index < segments.length; index += 1) {
     const segment = segments[index];
+    if (isAudioOverlay(segment)) continue;
     const dur = segmentDuration(segment);
     const isLastSegment = index === segments.length - 1;
     if (t >= cursor && (t < cursor + dur || (isLastSegment && t <= cursor + dur))) {
@@ -56,6 +84,7 @@ export function sourceToTimelineTime(segments, sourceTime, preferredTimelineTime
   let cursor = 0;
   for (let index = 0; index < segments.length; index += 1) {
     const segment = segments[index];
+    if (isAudioOverlay(segment)) continue;
     const segStart = Number(segment.start || 0);
     const segEnd = Number(segment.end || 0);
     const dur = Math.max(0, segEnd - segStart);

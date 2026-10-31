@@ -88,6 +88,7 @@ function TimelineVisualizer({
   selectionEnd = 0,
   totalDuration = 0,
   segments = [],
+  isSourcePreview = false,
   onPlayheadChange = () => {},
   onSelectionStartChange = () => {},
   onSelectionEndChange = () => {},
@@ -207,9 +208,57 @@ function TimelineVisualizer({
   const safeSegments = Array.isArray(segments) ? segments : [];
   resetSegmentNumbersIfNewTimeline(safeSegments);
 
+  // Initialize the main track cursor to keep track of the position of non-audio segments on the timeline.
+  let mainTrackCursor = 0;
+  const positionedSegments = safeSegments.map((segment, index) => {
+    const isAudioOverlay = getTimelineMediaType(segment) === "audio" || segment.audioOnly;
+    const timelineStart = isAudioOverlay && Number.isFinite(Number(segment.timelineStart))
+      ? Math.max(0, Number(segment.timelineStart))
+      : mainTrackCursor;
+    if (!isAudioOverlay) {
+      mainTrackCursor += Math.max(0, Number(segment.end) - Number(segment.start));
+    }
+    return { segment, index, timelineStart, isAudioOverlay };
+  });
+
+  // Render a single segment block within the timeline. This includes handling selection, dragging, and displaying segment information.
+  const renderSegmentBlock = ({ segment, index, timelineStart, isAudioOverlay }) => {
+    const duration = Math.max(0, Number(segment.end) - Number(segment.start));
+    const widthPct = totalDuration > 0 ? (duration / totalDuration) * 100 : 0;
+    const timelineEnd = timelineStart + duration;
+    const isSelected = Number(selectionStart) === timelineStart && Number(selectionEnd) === timelineEnd;
+    const isDragging = draggingMode !== null && typeof draggingMode === "object" && draggingMode.type === "segment" && draggingMode.index === index;
+    const segmentNumber = getTimelineDisplayNumber(segment, safeSegments, getSegmentNumber(segment));
+
+    const handleSegmentMouseDown = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onSelectionStartChange(timelineStart);
+      onSelectionEndChange(timelineEnd);
+      onPlayheadChange(timelineStart);
+      onSegmentClick(segment, index);
+      setDraggingMode({ type: "segment", index, moved: false });
+    };
+
+    return (
+      <div
+        className={`timeline-segment-block timeline-segment-block--${getTimelineMediaType(segment)}${segment.audioOnly ? " timeline-segment-block--audio-only" : ""}${isSelected ? " timeline-segment-block--selected" : ""}${isDragging ? " timeline-segment-block--dragging" : ""}`}
+        style={{ left: `${(timelineStart / Math.max(totalDuration, 1)) * 100}%`, width: `${Math.max(widthPct, 0)}%`, cursor: isDragging ? "grabbing" : "pointer" }}
+        title={`${getTimelineMediaLabel(segment, t)} ${segmentNumber}: ${formatTimeShort(timelineStart)} - ${formatTimeShort(timelineEnd)}`}
+        aria-label={`${getTimelineMediaLabel(segment, t)} ${segmentNumber}: ${formatTimeShort(timelineStart)} - ${formatTimeShort(timelineEnd)}`}
+        onMouseDown={handleSegmentMouseDown}
+        data-track={isAudioOverlay ? "audio" : "main"}
+      >
+        <span className="timeline-segment-number">{segmentNumber}</span>
+        <span className="timeline-segment-media-icon" aria-hidden="true">{getTimelineMediaIcon(segment)}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="timeline-visualizer-container">
       <div className="timeline-time-display">
+        {isSourcePreview ? <span>{t("preview")}: </span> : null}
         <label className="timeline-time-input-label">
           <span className="sr-only">{t("playhead")}</span>
           <input
@@ -243,43 +292,28 @@ function TimelineVisualizer({
         </div>
         <div className="timeline-background" />
 
-        <div className="timeline-segments">
-          {safeSegments.reduce((items, segment, index) => {
-            const duration = Math.max(0, Number(segment.end) - Number(segment.start));
-            const widthPct = totalDuration > 0 ? (duration / totalDuration) * 100 : 0;
-            const segmentNumber = getTimelineDisplayNumber(segment, safeSegments, getSegmentNumber(segment));
-            const timelineStart = items.timelineCursor;
-            const timelineEnd = timelineStart + duration;
-            const isSelected = Number(selectionStart) === timelineStart && Number(selectionEnd) === timelineEnd;
-            const isDragging = draggingMode !== null && typeof draggingMode === "object" && draggingMode.type === "segment" && draggingMode.index === index;
-
-            const handleSegmentMouseDown = (event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onSelectionStartChange(timelineStart);
-              onSelectionEndChange(timelineEnd);
-              onPlayheadChange(timelineStart);
-              onSegmentClick(segment, index);
-              setDraggingMode({ type: "segment", index, moved: false });
-            };
-
-            items.elements.push(
-              <React.Fragment key={`segment-${index}-${segment.start}-${segment.end}`}>
-                <div
-                  className={`timeline-segment-block timeline-segment-block--${getTimelineMediaType(segment)}${segment.audioOnly ? " timeline-segment-block--audio-only" : ""}${isSelected ? " timeline-segment-block--selected" : ""}${isDragging ? " timeline-segment-block--dragging" : ""}`}
-                  style={{ width: `${Math.max(widthPct, 0)}%`, cursor: isDragging ? "grabbing" : "pointer" }}
-                  title={`${getTimelineMediaLabel(segment, t)} ${segmentNumber}: ${formatTimeShort(segment.start)} - ${formatTimeShort(segment.end)}`}
-                  aria-label={`${getTimelineMediaLabel(segment, t)} ${segmentNumber}: ${formatTimeShort(segment.start)} - ${formatTimeShort(segment.end)}`}
-                  onMouseDown={handleSegmentMouseDown}
-                >
-                  <span className="timeline-segment-number">{segmentNumber}</span>
-                  <span className="timeline-segment-media-icon" aria-hidden="true">{getTimelineMediaIcon(segment)}</span>
-                </div>
-              </React.Fragment>
-            );
-            items.timelineCursor = timelineEnd;
-            return items;
-          }, { elements: [], timelineCursor: 0 }).elements}
+        {/* Render the timeline lanes for both video and audio segments. */}
+        <div className="timeline-lanes">
+          <div className="timeline-lane timeline-lane--main">
+            <span className="timeline-lane-label">{t("videoSegment")}</span>
+            <div className="timeline-segments">
+              {positionedSegments.filter((item) => !item.isAudioOverlay).map((item) => (
+                <React.Fragment key={`segment-main-${item.index}-${item.segment.start}-${item.segment.end}`}>
+                  {renderSegmentBlock(item)}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+          <div className="timeline-lane timeline-lane--audio">
+            <span className="timeline-lane-label">{t("audioSegment")}</span>
+            <div className="timeline-segments">
+              {positionedSegments.filter((item) => item.isAudioOverlay).map((item) => (
+                <React.Fragment key={`segment-audio-${item.index}-${item.segment.start}-${item.segment.end}`}>
+                  {renderSegmentBlock(item)}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div
@@ -313,6 +347,7 @@ function TimelineEditor({
   selectionStart,
   selectionEnd,
   totalDuration,
+  isSourcePreview,
   segments,
   markers,
   onPlayheadChange,
@@ -333,6 +368,7 @@ function TimelineEditor({
         selectionStart={selectionStart}
         selectionEnd={selectionEnd}
         totalDuration={totalDuration}
+        isSourcePreview={isSourcePreview}
         segments={segments}
         markers={markers}
         onPlayheadChange={onPlayheadChange}

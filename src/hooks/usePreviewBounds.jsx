@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { logError } from "../lib/logger.js";
 import { editorMessages } from "../lib/editorMessages.js";
-import { clamp, timelineDuration, timelineToSourceTime } from "../lib/videoTimeline.js";
+import { clamp, isAudioOverlay, timelineDuration, timelineToSourceTime } from "../lib/videoTimeline.js";
 import useLanguage from "./useLanguage.jsx";
 
 // Tracks the displayed video rectangle inside the preview stage.
@@ -58,7 +58,7 @@ export function usePlayheadPreview({ videoRef, totalDuration, segments, setPlayh
     const video = videoRef.current;
     if (!video) return;
 
-    const sourceTime = timelineToSourceTime(timelineSegments, safeTime);
+    const sourceTime = timelineSegments.length ? timelineToSourceTime(timelineSegments, safeTime) : safeTime;
     if (Math.abs((Number(video.currentTime) || 0) - sourceTime) > 0.05) {
       video.currentTime = sourceTime;
     }
@@ -69,6 +69,7 @@ function sourceTimeAtCurrentTimelinePosition(segments, sourceTime, preferredTime
   let cursor = 0;
   for (let index = 0; index < segments.length; index += 1) {
     const segment = segments[index];
+    if (isAudioOverlay(segment)) continue;
     const duration = Math.max(0, Number(segment.end) - Number(segment.start));
     const end = cursor + duration;
     const isLastSegment = index === segments.length - 1;
@@ -179,7 +180,9 @@ export function usePreviewPlayback({
     setPreviewCurrentTime(currentTime);
     if (!isPreviewPlaying) return;
 
-    const timelineTime = sourceTimeAtCurrentTimelinePosition(segments, currentTime, Number(playhead));
+    const timelineTime = segments.length
+      ? sourceTimeAtCurrentTimelinePosition(segments, currentTime, Number(playhead))
+      : currentTime;
     if (timelineTime !== null && Math.abs(Number(playhead) - timelineTime) > 0.15) {
       onPlayheadChange(timelineTime);
     }
@@ -196,6 +199,7 @@ export function usePreviewPlayback({
     let cursor = 0;
     const currentTimelineTime = Number(playhead) || 0;
     for (const segment of segments) {
+      if (isAudioOverlay(segment)) continue;
       const segmentDuration = Math.max(0, Number(segment.end) - Number(segment.start));
       const segmentEnd = cursor + segmentDuration;
       if (currentTimelineTime < segmentEnd - 0.05) {

@@ -38,7 +38,7 @@ Rust も優れた選択肢ですが、このプロジェクトでは次の理由
 | --- | --- |
 | **Crop** — プレビューをドラッグ、または数値で座標を指定して映像を切り抜き |
 | **メディアソース** — 動画・音声・画像をソース一覧に追加 |
-| **プレビュー** — 動画・音声・画像をタイムライン追加前に確認 |
+| **Preview** — Preview video, audio, and image sources. |
 | **タイムライン編集** — 切り取り・削除・コピー・貼り付けでメディアセグメントを再構成 |
 | **複数ソース対応** — 複数の素材ファイルを1つのタイムラインで組み合わせ |
 | **個別ファイル出力** — タイムラインの各項目を個別の出力ファイルで保存 |
@@ -67,7 +67,9 @@ C:\Users\<ユーザー名>\AppData\Local\com.frost.videoeditor\EBWebView\Default
 
 ## 出力について
 
-crop は画素を変更するため、動画の再エンコードが必要です。CPU エンコードでは H.264（libx264 -fast -crf 18）で出力。GPU エンコーダが利用可能ならば、高速かつバランスの取れた設定で処理します。4コア以上のマシンでは、最大2つのタイムラインアイテムを並列処理し、CPU 使用率を分散させます。
+crop は画素を変更するため、動画の再エンコードが必要です。CPU エンコードでは H.264（libx264 -preset veryfast -crf 18）で出力。GPU エンコーダが利用可能ならば、高速かつバランスの取れた設定で処理します。4コア以上のマシンでは、最大2つのタイムラインアイテムを並列処理し、CPU 使用率を分散させます。
+
+The High quality profile uses H.264 with `libx264 -preset slow -crf 14` on CPU or a quality target of 15 on supported NVIDIA, Intel, and AMD encoders. These encoder-specific quality scales are not directly comparable. This option is lossy and can require more time and storage. Eligible exports without video or audio processing copy the original streams.
 
 エクスポート確認ダイアログで **crop後も元の解像度を保つ** をオフにすると、crop 領域の実解像度で出力できます。アップスケールが不要な場合、この設定で高速化・高品質化・ファイルサイズ削減が実現します。
 
@@ -79,12 +81,17 @@ npm run build:exporter
 npm run react:start
 ```
 
+If a Tauri build fails after moving the project or because of stale Cargo build metadata, stop running builds and run `npm run tauri:clean` from the project root. This removes generated Cargo build outputs from the configured target directory; the next Tauri build will recreate them and take longer.
+
 ## 使い方
 
 1. 動画・音声・画像の素材を1つ以上選択
 2. プレビューで確認し、素材をタイムラインへ追加して並べ替え
 3. 必要に応じて crop、切り取り・削除・コピー・貼り付けを実行
 4. タイムラインを出力（タイムラインアイテム1つ = 1ファイル）
+
+Newly imported videos are appended to the timeline automatically and will be included in exports. Audio and images remain in the media library until added to the timeline. When the timeline is empty, the preview playhead can seek through a loaded video or audio source without adding it.
+The default cut shortcut (`S`) requires a segment on the timeline and a playhead position between its ends. Shortcuts are ignored while typing in an input field.
 
 ## FAQ
 

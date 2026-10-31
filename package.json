@@ -16,6 +16,7 @@
     "android:apk:debug": "npm run android:sync && cd android && gradlew.bat assembleDebug",
     "android:apk:release": "npm run android:sync && cd android && gradlew.bat assembleRelease",
     "tauri": "tauri",
+    "tauri:clean": "cd src-tauri && cargo clean",
     "tauri:dev": "npm run build:exporter && npm run tauri:prepare && tauri dev",
     "tauri:build": "npm run tauri:prepare && tauri build",
     "dist:win:all": "npm run build:exporter && npm run tauri:prepare && npm run react:build && tauri build --target x86_64-pc-windows-msvc && tauri build --target i686-pc-windows-msvc",

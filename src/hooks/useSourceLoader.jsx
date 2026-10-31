@@ -21,6 +21,7 @@ export default function useSourceLoader({
   setMetadata,
   setSelectionStart,
   setSelectionEnd,
+  setPlayhead,
   setPlayheadWithPreview,
   setClipboard,
   setOutputPath,
@@ -54,17 +55,19 @@ export default function useSourceLoader({
       const info = result.info || (await editorApi.probeVideo(result.filePath));
 
       const nextSourceName = result.fileName || result.filePath.split(/[\\/]/).pop() || "video";
+      let timelineStart;
       if (!skipRegister) {
-        const wasRegistered = registerSource?.({
+        const registration = registerSource?.({
           filePath: result.filePath,
           fileUrl: result.fileUrl,
           fileName: nextSourceName,
           info,
           mediaType
         });
-        if (wasRegistered === false) {
+        if (registration === false) {
           return;
         }
+        timelineStart = registration?.timelineStart;
       }
       setSourcePath(result.filePath);
       setSourceUrl(result.fileUrl);
@@ -77,10 +80,13 @@ export default function useSourceLoader({
         duration: sourceDuration
       });
       
-      // Loading a source prepares it for editing but does not place it on the timeline.
-      setSelectionStart(0);
-      setSelectionEnd(sourceDuration);
-      setPlayheadWithPreview(0);
+      setSelectionStart(Number.isFinite(timelineStart) ? timelineStart : 0);
+      setSelectionEnd((Number.isFinite(timelineStart) ? timelineStart : 0) + sourceDuration);
+      if (Number.isFinite(timelineStart)) {
+        setPlayhead(timelineStart);
+      } else {
+        setPlayheadWithPreview(0);
+      }
       setClipboard([]);
       setOutputPath("");
       setCrop(emptyCrop);
@@ -95,7 +101,7 @@ export default function useSourceLoader({
       messages.setErrorMessage(error?.message || editorMessages.videoLoadingFailed);
       messages.setStatusMessage(editorMessages.loadFailed);
     }
-  }, [clearUndoHistory, editorApi, emptyCrop, isOperationTypeEnabled, messages, registerSource, resetCropSelection, setClipboard, setCrop, setMetadata, setOperationLogs, setOutputPath, setPlayheadWithPreview, setSelectionEnd, setSelectionStart, setSourceMediaType, setSourceName, setSourcePath, setSourceUrl, t]);
+  }, [clearUndoHistory, editorApi, emptyCrop, isOperationTypeEnabled, messages, registerSource, resetCropSelection, setClipboard, setCrop, setMetadata, setOperationLogs, setOutputPath, setPlayhead, setPlayheadWithPreview, setSelectionEnd, setSelectionStart, setSourceMediaType, setSourceName, setSourcePath, setSourceUrl, t]);
 
   const handleChooseSource = useCallback(async () => {
     if (!editorApi) {

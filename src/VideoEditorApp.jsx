@@ -4,10 +4,12 @@ import {
   segmentDuration,
   timelineDuration,
   timelineSegmentAtTime,
+  timelineSegmentStart,
   timelineToSourceTime,
   normalizeRange,
   formatVideoTime,
-  splitSegmentsAtTimelinePositions
+  splitSegmentsAtTimelinePositions,
+  isAudioOverlay
 } from "./lib/videoTimeline.js";
 import TimelineEditor, { TimelinePanel } from "./components/Timeline.jsx";
 import CropEditor from "./components/CropEditor.jsx";
@@ -43,6 +45,7 @@ import {
   getDraftCropBoxStyle,
   getPreviewViewportStyle
 } from "./lib/crop.js";
+import buyMeATeaImage from "../img/buyMeATea.png";
 
 const emptyCrop = { left: 0, top: 0, right: 0, bottom: 0 };
 
@@ -51,6 +54,7 @@ export default function VideoEditorApp() {
   const editorApi = typeof window !== "undefined" ? window.editorApi : null;
   const previewStageRef = useRef(null);
   const previewVideoRef = useRef(null);
+  const timelineAudioRefs = useRef(new Map());
 
   const [sourcePath, setSourcePath] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
@@ -121,6 +125,10 @@ export default function VideoEditorApp() {
     height: metadata.height
   });
   const totalDuration = useMemo(() => timelineDuration(segments), [segments]);
+  const isSourcePreviewTimeline = Boolean(sourceUrl) && segments.length === 0 && sourceMediaType !== "image";
+  const previewTimelineDuration = isSourcePreviewTimeline
+    ? Math.max(0, Number(metadata.duration) || 0)
+    : totalDuration;
   const selectedRange = useMemo(
     () => normalizeRange(selectionStart, selectionEnd, totalDuration),
     [selectionStart, selectionEnd, totalDuration]
@@ -158,10 +166,10 @@ export default function VideoEditorApp() {
     setOperationLogs,
     isOperationTypeEnabled
   });
-  useTimelineDurationSync({ totalDuration, setSelectionStart, setSelectionEnd, setPlayhead });
+  useTimelineDurationSync({ totalDuration: previewTimelineDuration, setSelectionStart, setSelectionEnd, setPlayhead });
   const setPlayheadWithPreview = usePlayheadPreview({
     videoRef: previewVideoRef,
-    totalDuration,
+    totalDuration: previewTimelineDuration,
     segments,
     setPlayhead
   });
@@ -294,6 +302,26 @@ export default function VideoEditorApp() {
     pushUndoSnapshot,
     messages
   });
+  const appendSourceToTimeline = useCallback((source) => {
+    const sourceDuration = source.mediaType === "image" ? 5 : Number(source.info?.duration);
+    if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) {
+      showTimelineToast(t("mediaHasNoDuration"), "error");
+      return false;
+    }
+    const duration = Math.max(0.1, sourceDuration);
+    setSegments((current) => [...current, {
+      start: 0,
+      end: duration,
+      ...(source.mediaType === "audio" ? { audioOnly: true, timelineStart: playhead } : {}),
+      mediaType: source.mediaType,
+      mimeType: source.info?.mimeType,
+      filePath: source.filePath,
+      fileUrl: source.fileUrl,
+      fileName: source.fileName,
+      sourceId: source.id || source.filePath
+    }]);
+    return true;
+  }, [playhead, t]);
   const registerSource = useCallback((source) => {
     if (sourcePathsRef.current.has(source.filePath)) {
       showTimelineToast(t("sameFile"), "error");
@@ -303,8 +331,15 @@ export default function VideoEditorApp() {
     setSources((current) => {
       return [...current, { ...source, id: source.filePath }];
     });
-    return true;
-  }, [showTimelineToast, t]);
+    if (source.mediaType === "video" && appendSourceToTimeline(source)) {
+      return {
+        timelineStart: segments.reduce((start, segment) => (
+          isAudioOverlay(segment) ? start : start + segmentDuration(segment)
+        ), 0)
+      };
+    }
+    return {};
+  }, [appendSourceToTimeline, segments, t]);
   const { loadSource, handleChooseSource } = useSourceLoader({
     editorApi,
     setSourcePath,
@@ -316,6 +351,7 @@ export default function VideoEditorApp() {
     setSegments,
     setSelectionStart,
     setSelectionEnd,
+    setPlayhead,
     setPlayheadWithPreview,
     setClipboard,
     setTimelineParts,
@@ -383,29 +419,14 @@ export default function VideoEditorApp() {
     removeSource(source);
   };
   const handleAddSourceToTimeline = (source) => {
-    const duration = Math.max(0.1, Number(source.info?.duration) || (source.mediaType === "image" ? 5 : 0));
-    if (!duration) {
-      showTimelineToast(t("mediaHasNoDuration"), "error");
-      return;
+    if (appendSourceToTimeline(source)) {
+      showTimelineToast(t("addedToTimeline", source.fileName));
     }
-    setSegments((current) => [...current, {
-      start: 0,
-      end: duration,
-      mediaType: source.mediaType,
-      mimeType: source.info?.mimeType,
-      filePath: source.filePath,
-      fileUrl: source.fileUrl,
-      fileName: source.fileName,
-      sourceId: source.id
-    }]);
-    showTimelineToast(t("addedToTimeline", source.fileName));
   };
   const handleSelectTimelineSegment = useCallback((index) => {
     if (index < 0 || index >= segments.length) return;
     const segment = segments[index];
-    const start = segments
-      .slice(0, index)
-      .reduce((total, item) => total + segmentDuration(item), 0);
+    const start = timelineSegmentStart(segments, index);
     const end = start + segmentDuration(segment);
     const source = sources.find((item) => item.id === segment.sourceId || item.filePath === segment.filePath);
     const shouldSwitchSource = Boolean(source && source.filePath !== sourcePath);
@@ -499,6 +520,36 @@ export default function VideoEditorApp() {
 
   const isPreviewAudioOnly = sourceMediaType === "audio" || Boolean(timelineSegmentAtTime(segments, playhead)?.audioOnly);
 
+  useEffect(() => {
+    const audioSegments = segments.filter((segment) => (
+      (segment.audioOnly || segment.mediaType === "audio" || segment.mimeType?.startsWith("audio/")) && segment.fileUrl
+    ));
+    const activeKeys = new Set(audioSegments.map((segment, index) => `${segment.sourceId || segment.filePath || index}-${segment.start}-${segment.end}`));
+    for (const [key, audio] of timelineAudioRefs.current.entries()) {
+      if (!activeKeys.has(key)) {
+        audio.pause();
+        timelineAudioRefs.current.delete(key);
+      }
+    }
+
+    audioSegments.forEach((segment, index) => {
+      const key = `${segment.sourceId || segment.filePath || index}-${segment.start}-${segment.end}`;
+      const audio = timelineAudioRefs.current.get(key);
+      if (!audio) return;
+      const start = Number.isFinite(Number(segment.timelineStart)) ? Number(segment.timelineStart) : 0;
+      const localTime = Number(playhead) - start;
+      const sourceTime = Number(segment.start || 0) + Math.max(0, localTime);
+      if (localTime >= 0 && localTime < segmentDuration(segment)) {
+        if (Math.abs((Number(audio.currentTime) || 0) - sourceTime) > 0.08) audio.currentTime = sourceTime;
+        if (isPreviewPlaying && audio.paused) {
+          audio.play().catch((error) => console.error("Failed to play timeline audio.", error));
+        }
+      } else if (!audio.paused) {
+        audio.pause();
+      }
+    });
+  }, [isPreviewPlaying, playhead, segments]);
+
   const previewViewportStyle = useMemo(() => {
     if (!isCropPreviewLocked || !hasCrop || !previewBounds) {
       return undefined;
@@ -590,6 +641,7 @@ export default function VideoEditorApp() {
     setSegments((current) => [...current, {
       ...segment,
       audioOnly: true,
+      timelineStart: selectionStart,
       audioSource: { start: segment.start, end: segment.end }
     }]);
     messages.clearErrorOnly();
@@ -867,12 +919,32 @@ export default function VideoEditorApp() {
             }}
           />
 
+          {segments.map((segment, index) => {
+            const isAudio = segment.audioOnly || segment.mediaType === "audio" || segment.mimeType?.startsWith("audio/");
+            if (!isAudio || !segment.fileUrl) return null;
+            const key = `${segment.sourceId || segment.filePath || index}-${segment.start}-${segment.end}`;
+            return (
+              <audio
+                key={`timeline-audio-${key}`}
+                ref={(element) => {
+                  if (element) timelineAudioRefs.current.set(key, element);
+                  else timelineAudioRefs.current.delete(key);
+                }}
+                className="timeline-audio-preview"
+                src={segment.fileUrl}
+                preload="auto"
+                aria-hidden="true"
+              />
+            );
+          })}
+
           <TimelineEditor
             t={t}
+            isSourcePreview={isSourcePreviewTimeline}
             playhead={playhead}
             selectionStart={selectedRange.start}
             selectionEnd={selectedRange.end}
-            totalDuration={totalDuration}
+            totalDuration={previewTimelineDuration}
             segments={segments}
             markers={cutMarkers}
             onPlayheadChange={setPlayheadWithPreview}
@@ -977,23 +1049,27 @@ export default function VideoEditorApp() {
         </aside>
       </section>
 
-      <p className="support-link">
-        Support: <a
-          title="GitHub Sponsors"
-          onClick={(e) => {
-            e.preventDefault();
-            if (isTauriRuntime()) {
-              openExternalUrl("https://github.com/sponsors/KFrost-Sponsor").catch((error) => {
-                console.error("Failed to open external link", error);
-              });
-              return;
-            }
-            window.open("https://github.com/sponsors/KFrost-Sponsor", "_blank", "noopener,noreferrer");
-          }}
-          rel="noopener noreferrer"
-          style={{ color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}
-        >GitHub Sponsors</a>
-      </p>
+      If you enjoy using this app, consider supporting development:
+
+      <section className="settings-support">
+        <p>
+          <a
+            href="https://www.buymeacoffee.com/kfrost533"
+            onClick={(e) => {
+              e.preventDefault();
+              openExternalUrl("https://www.buymeacoffee.com/kfrost533");
+            }}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <img
+              src={buyMeATeaImage}
+              alt="Buy Me a Coffee"
+              style={{ height: 60, width: 217 }}
+            />
+          </a>
+        </p>
+      </section>
     </main>
     </>
   );

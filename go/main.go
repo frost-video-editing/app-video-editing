@@ -16,11 +16,12 @@ import (
 )
 
 type Segment struct {
-	Start      float64 `json:"start"`
-	End        float64 `json:"end"`
-	AudioOnly  bool    `json:"audioOnly"`
-	SourcePath string  `json:"sourcePath"`
-	MediaType  string  `json:"mediaType"`
+	Start         float64 `json:"start"`
+	End           float64 `json:"end"`
+	TimelineStart float64 `json:"timelineStart"`
+	AudioOnly     bool    `json:"audioOnly"`
+	SourcePath    string  `json:"sourcePath"`
+	MediaType     string  `json:"mediaType"`
 }
 
 type Request struct {
@@ -55,7 +56,7 @@ func encodingArgs(profile string) []string {
 	case "fast":
 		preset, crf = "ultrafast", "23"
 	case "high":
-		preset, crf = "slow", "16"
+		preset, crf = "slow", "14"
 	case "gpu":
 		preset, crf = "veryfast", "20"
 	}
@@ -86,7 +87,6 @@ func detectEncoder(ffmpeg string) string {
 	return "libx264"
 }
 
-// videoE
 func videoEncodingArgs(encoder, profile string, threads int) []string {
 	if encoder == "h264_nvenc" {
 		preset, quality := "p4", "19"
@@ -94,7 +94,7 @@ func videoEncodingArgs(encoder, profile string, threads int) []string {
 			preset, quality = "p1", "21"
 		}
 		if profile == "high" {
-			preset, quality = "p6", "17"
+			preset, quality = "p6", "15"
 		}
 		return []string{"-c:v", encoder, "-preset", preset, "-tune", "hq", "-rc", "vbr", "-cq", quality, "-b:v", "0"}
 	}
@@ -104,7 +104,7 @@ func videoEncodingArgs(encoder, profile string, threads int) []string {
 			quality = "21"
 		}
 		if profile == "high" {
-			quality = "17"
+			quality = "15"
 		}
 		return []string{"-c:v", encoder, "-preset", "medium", "-global_quality", quality}
 	}
@@ -114,7 +114,7 @@ func videoEncodingArgs(encoder, profile string, threads int) []string {
 			quality = "21"
 		}
 		if profile == "high" {
-			quality = "17"
+			quality = "15"
 		}
 		return []string{"-c:v", encoder, "-quality", "quality", "-rc", "cqp", "-qp_i", quality, "-qp_p", quality}
 	}
@@ -246,6 +246,137 @@ func exportSegment(request Request, ffmpeg, encoder string, index int, segment S
 	return command.Wait()
 }
 
+func isAudioOverlay(segment Segment) bool {
+	return segment.AudioOnly || segment.MediaType == "audio"
+}
+
+func timelineSegmentStart(segments []Segment, index int) float64 {
+	if isAudioOverlay(segments[index]) {
+		return math.Max(0, segments[index].TimelineStart)
+	}
+	start := 0.0
+	for item := 0; item < index; item++ {
+		if !isAudioOverlay(segments[item]) {
+			start += math.Max(0, segments[item].End-segments[item].Start)
+		}
+	}
+	return start
+}
+
+func composedTimelineDuration(segments []Segment) float64 {
+	total := 0.0
+	for index, segment := range segments {
+		end := timelineSegmentStart(segments, index) + math.Max(0, segment.End-segment.Start)
+		if end > total {
+			total = end
+		}
+	}
+	return total
+}
+
+func hasAudioOverlay(segments []Segment) bool {
+	for _, segment := range segments {
+		if isAudioOverlay(segment) {
+			return true
+		}
+	}
+	return false
+}
+
+func exportComposedTimeline(request Request, ffmpeg, encoder, output, filter string, adjustAudio bool, threads int) error {
+	videoIndexes := []int{}
+	audioIndexes := []int{}
+	args := []string{"-y", "-progress", "pipe:1", "-stats_period", "0.25", "-nostats"}
+	for index, segment := range request.Segments {
+		args = append(args, segmentInputArgs(request, segment)...)
+		if isAudioOverlay(segment) {
+			audioIndexes = append(audioIndexes, index)
+		} else {
+			videoIndexes = append(videoIndexes, index)
+		}
+	}
+
+	filters := []string{}
+	videoLabels := []string{}
+	for inputIndex, segmentIndex := range videoIndexes {
+		label := fmt.Sprintf("v%d", inputIndex)
+		videoFilter := fmt.Sprintf("[%d:v]setpts=PTS-STARTPTS", segmentIndex)
+		if filter != "" {
+			videoFilter += "," + filter
+			if request.PreserveCropResolution {
+				videoFilter += ",scale=iw:ih"
+			}
+		}
+		filters = append(filters, videoFilter+"["+label+"]")
+		videoLabels = append(videoLabels, "["+label+"]")
+	}
+	videoMap := ""
+	if len(videoLabels) == 1 {
+		videoMap = videoLabels[0]
+	} else if len(videoLabels) > 1 {
+		concatLabel := "vout"
+		filters = append(filters, strings.Join(videoLabels, "")+fmt.Sprintf("concat=n=%d:v=1:a=0[%s]", len(videoLabels), concatLabel))
+		videoMap = "[" + concatLabel + "]"
+	}
+
+	audioLabels := []string{}
+	for audioIndex, segmentIndex := range audioIndexes {
+		delay := int(math.Round(timelineSegmentStart(request.Segments, segmentIndex) * 1000))
+		label := fmt.Sprintf("a%d", audioIndex)
+		audioFilter := fmt.Sprintf("[%d:a]asetpts=PTS-STARTPTS,adelay=%d:all=1", segmentIndex, delay)
+		if adjustAudio {
+			audioFilter += fmt.Sprintf(",volume=%g", request.AudioGainPercent/100)
+			if request.AudioNormalize {
+				audioFilter += ",dynaudnorm"
+			}
+		}
+		filters = append(filters, audioFilter+"["+label+"]")
+		audioLabels = append(audioLabels, "["+label+"]")
+	}
+	audioMap := ""
+	if len(audioLabels) == 1 {
+		audioMap = audioLabels[0]
+	} else if len(audioLabels) > 1 {
+		mixLabel := "aout"
+		filters = append(filters, strings.Join(audioLabels, "")+fmt.Sprintf("amix=inputs=%d:duration=longest:dropout_transition=0[%s]", len(audioLabels), mixLabel))
+		audioMap = "[" + mixLabel + "]"
+	}
+
+	if len(filters) > 0 {
+		args = append(args, "-filter_complex", strings.Join(filters, ";"))
+	}
+	if videoMap != "" {
+		args = append(args, "-map", videoMap)
+	}
+	if audioMap != "" {
+		args = append(args, "-map", audioMap, "-c:a", "aac", "-b:a", "192k")
+	}
+	if videoMap != "" {
+		args = append(args, videoEncodingArgs(encoder, request.ExportProfile, threads)...)
+	} else {
+		args = append(args, "-vn")
+	}
+	args = append(args, "-t", formatNumber(composedTimelineDuration(request.Segments)), "-movflags", "+faststart", output)
+	command := exec.Command(ffmpeg, args...)
+	command.Stderr = os.Stderr
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	if err := command.Start(); err != nil {
+		return err
+	}
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		value, ok := parseProgressTime(scanner.Text())
+		if ok {
+			progress := math.Min(100, math.Max(0, value/composedTimelineDuration(request.Segments)*100))
+			emit(map[string]any{"type": "progress", "progress": progress, "message": fmt.Sprintf("タイムラインを合成中... %.1f%%", progress), "currentSegment": 1, "currentSegmentProgress": progress, "totalSegments": 1, "indeterminate": false})
+		}
+	}
+	return command.Wait()
+}
+
 // export the video segments based on the request
 func main() {
 	var request Request
@@ -275,6 +406,22 @@ func main() {
 		os.Exit(1)
 	}
 	request.Segments = validSegments
+	if hasAudioOverlay(request.Segments) {
+		encoder := detectEncoder(ffmpeg)
+		if err := exportComposedTimeline(request, ffmpeg, encoder, request.OutputPath, filter, adjustAudio, runtime.NumCPU()); err != nil && encoder != "libx264" {
+			err = exportComposedTimeline(request, ffmpeg, "libx264", request.OutputPath, filter, adjustAudio, runtime.NumCPU())
+			if err != nil {
+				emit(map[string]any{"type": "error", "message": err.Error()})
+				os.Exit(1)
+			}
+		} else if err != nil {
+			emit(map[string]any{"type": "error", "message": err.Error()})
+			os.Exit(1)
+		}
+		emit(map[string]any{"type": "progress", "progress": 100, "message": "出力が完了しました。", "currentSegment": 1, "totalSegments": 1, "indeterminate": false})
+		emit(map[string]any{"type": "result", "outputPath": request.OutputPath, "outputPaths": []string{request.OutputPath}})
+		return
+	}
 	outputs := make([]string, len(validSegments))
 	filter = cropFilter(request)
 	totalDuration := 0.0
