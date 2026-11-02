@@ -1048,28 +1048,6 @@ export default function VideoEditorApp() {
           </section>
         </aside>
       </section>
-
-      If you enjoy using this app, consider supporting development:
-
-      <section className="settings-support">
-        <p>
-          <a
-            href="https://www.buymeacoffee.com/kfrost533"
-            onClick={(e) => {
-              e.preventDefault();
-              openExternalUrl("https://www.buymeacoffee.com/kfrost533");
-            }}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            <img
-              src={buyMeATeaImage}
-              alt="Buy Me a Coffee"
-              style={{ height: 60, width: 217 }}
-            />
-          </a>
-        </p>
-      </section>
     </main>
     </>
   );

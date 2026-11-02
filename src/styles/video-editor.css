@@ -121,6 +121,7 @@ button:disabled {
   margin: 0 auto;
   padding: 24px 0 56px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   animation: rise 420ms ease-out;
 }
@@ -347,7 +348,10 @@ button:disabled {
 
 .panel--preview {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
+  align-content: start;
+  min-width: 0;
 }
 
 .panel--side {
@@ -363,7 +367,8 @@ button:disabled {
 
 .preview-stage {
   position: relative;
-  min-height: 380px;
+  height: clamp(180px, 42vh, 380px);
+  min-width: 0;
   background:
     radial-gradient(circle at top left, rgba(76, 201, 240, 0.12), transparent 45%),
     #050b12;
@@ -1196,12 +1201,9 @@ input[type="range"] {
 
 @media (max-width: 1080px) {
   .editor-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .preview-stage {
-    min-height: 320px;
-  }
 }
 
 @media (max-width: 760px) {

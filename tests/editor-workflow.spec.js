@@ -60,6 +60,25 @@ async function installMediaMock(page) {
   });
 }
 
+test("keeps the complete preview stage visible at desktop and mobile sizes", async ({ page }) => {
+  await installTauriMock(page);
+  await installMediaMock(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "メディアを選択" }).click();
+
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    const stage = page.locator(".preview-stage");
+    await stage.evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
+    const bounds = await stage.boundingBox();
+    expect(bounds.height).toBeLessThanOrEqual(viewport.height * 0.6);
+    expect(bounds.width).toBeLessThanOrEqual(viewport.width);
+    expect(bounds.y).toBeGreaterThanOrEqual(0);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height + 1);
+    await expect(page.locator("video.preview-video")).toHaveCSS("object-fit", "contain");
+  }
+});
+
 test("imports a video onto the timeline and enables seeking and cutting", async ({ page }) => {
   await installTauriMock(page);
   await installMediaMock(page);

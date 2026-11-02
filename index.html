@@ -12,6 +12,29 @@
   <body>
     <div id="root"></div>
     <footer>
+      <script type="module">
+        import buyMeATeaImage from "./img/buyMeATea.png";
+        window.buyMeATeaImage = buyMeATeaImage;
+      </script>
+      If you enjoy using this app, consider supporting development:
+
+      <section className="settings-support">
+        <p>
+          <a
+            href="https://www.buymeacoffee.com/kfrost533"
+            onclick="event.preventDefault(); window.openExternalUrl('https://www.buymeacoffee.com/kfrost533');"
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <img
+              src="img/buyMeATea.png"
+              alt="Buy Me a Coffee"
+              style="height: 60px; width: 217px;"
+            />
+          </a>
+        </p>
+      </section>
+
       © <span id="copyright-year"></span> Frosty Editor. All rights reserved.
     </footer>
     <script>
