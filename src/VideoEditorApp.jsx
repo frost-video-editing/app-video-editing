@@ -125,7 +125,7 @@ export default function VideoEditorApp() {
     height: metadata.height
   });
   const totalDuration = useMemo(() => timelineDuration(segments), [segments]);
-  const isSourcePreviewTimeline = Boolean(sourceUrl) && segments.length === 0 && sourceMediaType !== "image";
+  const isSourcePreviewTimeline = Boolean(sourceUrl) && segments.length === 0 && sourceMediaType === "audio";
   const previewTimelineDuration = isSourcePreviewTimeline
     ? Math.max(0, Number(metadata.duration) || 0)
     : totalDuration;
@@ -166,12 +166,18 @@ export default function VideoEditorApp() {
     setOperationLogs,
     isOperationTypeEnabled
   });
-  useTimelineDurationSync({ totalDuration: previewTimelineDuration, setSelectionStart, setSelectionEnd, setPlayhead });
   const setPlayheadWithPreview = usePlayheadPreview({
     videoRef: previewVideoRef,
     totalDuration: previewTimelineDuration,
     segments,
     setPlayhead
+  });
+  useTimelineDurationSync({
+    totalDuration: previewTimelineDuration,
+    playhead,
+    setSelectionStart,
+    setSelectionEnd,
+    setPlayheadWithPreview
   });
 
   useEffect(() => {
@@ -209,7 +215,7 @@ export default function VideoEditorApp() {
     duration: metadata.duration,
     segments,
     playhead,
-    onPlayheadChange: setPlayhead,
+    onPlayheadChange: (time) => setPlayhead(clamp(time, 0, previewTimelineDuration)),
     setErrorText: messages.setErrorMessage,
     setStatus: messages.setStatusMessage
   });
@@ -308,10 +314,9 @@ export default function VideoEditorApp() {
       showTimelineToast(t("mediaHasNoDuration"), "error");
       return false;
     }
-    const duration = Math.max(0.1, sourceDuration);
     setSegments((current) => [...current, {
       start: 0,
-      end: duration,
+      end: sourceDuration,
       ...(source.mediaType === "audio" ? { audioOnly: true, timelineStart: playhead } : {}),
       mediaType: source.mediaType,
       mimeType: source.info?.mimeType,
@@ -874,8 +879,8 @@ export default function VideoEditorApp() {
             isPreviewReady={isPreviewReady}
             isPreviewPlaying={isPreviewPlaying}
             previewPlaybackRate={previewPlaybackRate}
-            previewCurrentTime={formatVideoTime(previewCurrentTime)}
-            duration={formatVideoTime(metadata.duration)}
+            previewCurrentTime={formatVideoTime(playhead)}
+            duration={formatVideoTime(previewTimelineDuration)}
             onPointerDown={handlePreviewPointerDown}
             onPointerMove={handlePreviewPointerMove}
             onPointerUp={handlePreviewPointerUp}

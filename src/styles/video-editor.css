@@ -387,6 +387,8 @@ button:disabled {
   position: absolute;
   inset: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   place-items: center;
   overflow: hidden;
 }

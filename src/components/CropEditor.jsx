@@ -73,6 +73,7 @@ export default function CropEditor({
                     key={sourceUrl}
                     ref={videoRef}
                     className="preview-audio"
+                    crossOrigin="anonymous"
                     src={sourceUrl}
                     controls
                     onTimeUpdate={onTimeUpdate}
@@ -95,6 +96,7 @@ export default function CropEditor({
                   key={sourceUrl}
                   ref={videoRef}
                   className={`preview-video${isPreviewAudioOnly ? " preview-video--audio-only" : ""}`}
+                  crossOrigin="anonymous"
                   src={sourceUrl}
                   style={previewVideoStyle}
                   playsInline

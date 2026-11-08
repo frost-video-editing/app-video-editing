@@ -382,7 +382,11 @@ export function useCropSelection({
   function getPreviewPoint(clientX, clientY) {
     const stage = stageRef.current;
     if (!stage || !previewBounds) return null;
-    return getCropPreviewPoint(clientX, clientY, stage.getBoundingClientRect(), previewBounds);
+    const stageRect = stage.getBoundingClientRect();
+    return getCropPreviewPoint(clientX, clientY, {
+      left: stageRect.left + stage.clientLeft,
+      top: stageRect.top + stage.clientTop
+    }, previewBounds);
   }
 
   function handleStartCropSelection() {

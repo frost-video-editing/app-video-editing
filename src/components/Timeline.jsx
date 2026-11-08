@@ -28,6 +28,13 @@ function formatTimeShort(seconds) {
   return `${String(hours).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+function formatTimelineDuration(seconds) {
+  const milliseconds = Math.round(Math.max(0, Number(seconds) || 0) * 1000);
+  const fraction = milliseconds % 1000;
+  const time = formatTimeShort(milliseconds / 1000);
+  return fraction ? `${time}.${String(fraction).padStart(3, "0")}` : time;
+}
+
 function parseTimeInput(value) {
   const text = String(value || "").trim();
   if (!text) return null;
@@ -123,7 +130,7 @@ function TimelineVisualizer({
   useEffect(() => {
     const updateWidth = () => {
       if (containerRef.current) {
-        setContainerWidth(containerRef.current.getBoundingClientRect().width);
+        setContainerWidth(containerRef.current.clientWidth);
       }
     };
     updateWidth();
@@ -133,7 +140,7 @@ function TimelineVisualizer({
   }, []);
 
   const timelineWidth = Math.max(containerWidth - (timelineInset * 2), 0);
-  const pixelsPerSecond = timelineWidth > 0 ? timelineWidth / Math.max(totalDuration, 1) : 0;
+  const pixelsPerSecond = timelineWidth > 0 && totalDuration > 0 ? timelineWidth / totalDuration : 0;
   const timeToPixels = (time) => time * pixelsPerSecond;
   const pixelsToTime = (pixels) => {
     if (!pixelsPerSecond) return 0;
@@ -141,7 +148,7 @@ function TimelineVisualizer({
     return Math.max(0, Math.min(totalDuration, time));
   };
 
-  const getTimelineX = (clientX, rect) => clientX - rect.left - timelineInset;
+  const getTimelineX = (clientX, rect) => clientX - rect.left - (containerRef.current?.clientLeft || 0) - timelineInset;
 
   const handleMouseDown = (event, mode) => {
     event.preventDefault();
@@ -243,7 +250,7 @@ function TimelineVisualizer({
     return (
       <div
         className={`timeline-segment-block timeline-segment-block--${getTimelineMediaType(segment)}${segment.audioOnly ? " timeline-segment-block--audio-only" : ""}${isSelected ? " timeline-segment-block--selected" : ""}${isDragging ? " timeline-segment-block--dragging" : ""}`}
-        style={{ left: `${(timelineStart / Math.max(totalDuration, 1)) * 100}%`, width: `${Math.max(widthPct, 0)}%`, cursor: isDragging ? "grabbing" : "pointer" }}
+        style={{ left: `${totalDuration > 0 ? (timelineStart / totalDuration) * 100 : 0}%`, width: `${Math.max(widthPct, 0)}%`, cursor: isDragging ? "grabbing" : "pointer" }}
         title={`${getTimelineMediaLabel(segment, t)} ${segmentNumber}: ${formatTimeShort(timelineStart)} - ${formatTimeShort(timelineEnd)}`}
         aria-label={`${getTimelineMediaLabel(segment, t)} ${segmentNumber}: ${formatTimeShort(timelineStart)} - ${formatTimeShort(timelineEnd)}`}
         onMouseDown={handleSegmentMouseDown}
@@ -273,7 +280,7 @@ function TimelineVisualizer({
           />
         </label>
         <span className="time-divider">/</span>
-        <span className="time-total">{formatTimeShort(totalDuration)}</span>
+        <span className="time-total">{formatTimelineDuration(totalDuration)}</span>
       </div>
 
       <div

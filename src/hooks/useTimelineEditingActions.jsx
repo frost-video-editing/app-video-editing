@@ -104,7 +104,6 @@ export default function useTimelineEditingActions({
         const nextSegments = current.filter((segment) => segment !== deletedSegment);
         const nextDuration = timelineDuration(nextSegments);
         preserveSelectionAfterDelete(nextDuration);
-        setPlayheadWithPreview((value) => clamp(value, 0, nextDuration));
         return nextSegments;
       });
       messages.setStatusMessage(t("partDeleted", index + 1));
@@ -359,20 +358,25 @@ export function useTimelineActions({
 // Keeps timeline selection and playhead values inside the current duration.
 export function useTimelineDurationSync({
   totalDuration,
+  playhead,
   setSelectionStart,
   setSelectionEnd,
-  setPlayhead
+  setPlayheadWithPreview
 }) {
   useEffect(() => {
     if (totalDuration <= 0) {
       setSelectionStart(0);
       setSelectionEnd(0);
-      setPlayhead(0);
       return;
     }
 
     setSelectionStart((value) => clamp(value, 0, totalDuration));
     setSelectionEnd((value) => clamp(value, 0, totalDuration));
-    setPlayhead((value) => clamp(value, 0, totalDuration));
-  }, [setPlayhead, setSelectionEnd, setSelectionStart, totalDuration]);
+  }, [setSelectionEnd, setSelectionStart, totalDuration]);
+
+  useEffect(() => {
+    if (playhead > totalDuration || playhead < 0) {
+      setPlayheadWithPreview(clamp(playhead, 0, totalDuration));
+    }
+  }, [playhead, setPlayheadWithPreview, totalDuration]);
 }

@@ -19,16 +19,17 @@ export default function usePreviewBounds({ stageRef, sourceUrl, width, height })
       if (!stage) {
         return;
       }
-      const stageRect = stage.getBoundingClientRect();
-      if (!stageRect.width || !stageRect.height) {
+      const stageWidth = stage.clientWidth;
+      const stageHeight = stage.clientHeight;
+      if (!stageWidth || !stageHeight) {
         return;
       }
-      const scale = Math.min(stageRect.width / width, stageRect.height / height);
+      const scale = Math.min(stageWidth / width, stageHeight / height);
       const previewWidth = width * scale;
       const previewHeight = height * scale;
       setPreviewBounds({
-        left: (stageRect.width - previewWidth) / 2,
-        top: (stageRect.height - previewHeight) / 2,
+        left: (stageWidth - previewWidth) / 2,
+        top: (stageHeight - previewHeight) / 2,
         width: previewWidth,
         height: previewHeight
       });
@@ -168,11 +169,14 @@ export function usePreviewPlayback({
     setPreviewLoadMessage(t("previewLoadingMore"));
   }
 
-  function handlePreviewVideoError() {
+  function handlePreviewVideoError(event) {
+    const error = event.currentTarget.error;
+    logError("usePreviewPlayback.media.load", new Error(error?.message || `Media loading failed (code ${error?.code ?? "unknown"}).`));
     setPreviewLoadProgress(0);
     setPreviewLoadedUntil(0);
     setPreviewLoadMessage(t("previewLoadFailed"));
     setIsPreviewReady(false);
+    setErrorText(t("previewLoadFailed"));
   }
 
   function handlePreviewTimeUpdate(event) {

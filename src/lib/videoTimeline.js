@@ -115,9 +115,10 @@ export function formatSeconds(value) {
 // Formats a duration as the editor's fixed minute-second-millisecond display.
 export function formatVideoTime(totalSeconds) {
   const total = Math.max(0, Number(totalSeconds) || 0);
-  const minutes = Math.floor(total / 60);
-  const seconds = Math.floor(total % 60);
-  const fraction = Math.round((total - Math.floor(total)) * 1000);
+  const milliseconds = Math.round(total * 1000);
+  const minutes = Math.floor(milliseconds / 60000);
+  const seconds = Math.floor(milliseconds / 1000) % 60;
+  const fraction = milliseconds % 1000;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(fraction).padStart(3, "0")}`;
 }
 
